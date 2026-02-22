@@ -15,7 +15,9 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts --minify",
-    "dev": "tsup src/index.ts --format cjs,esm --watch --dts"
+    "dev": "tsup src/index.ts --format cjs,esm --watch --dts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\""
   },
   "keywords": [],
   "author": "",
@@ -23,6 +25,7 @@
   "packageManager": "pnpm@10.28.2",
   "devDependencies": {
     "lucide-react": "^0.575.0",
+    "prettier": "^3.8.1",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3"
   }

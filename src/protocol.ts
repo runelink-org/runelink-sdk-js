@@ -10,6 +10,6 @@ export type ClientToServerMessage =
 export type ServerToClientMessage =
   | { type: "auth_success"; user_ref: string }
   | { type: "auth_error"; message: string }
-  | { type: "message"; channel_id: string; message: Message }
+  | { type: "message"; channel_id: string; message: Message };
 
 export type RunelinkMessage = ClientToServerMessage | ServerToClientMessage;
