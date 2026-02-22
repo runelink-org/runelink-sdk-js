@@ -7,7 +7,9 @@ import {
 import type { ZodError } from "zod";
 
 function formatZodError(error: ZodError): string {
-  return error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ");
+  return error.issues
+    .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+    .join("; ");
 }
 
 export class RunelinkConnection {
@@ -68,7 +70,9 @@ export class RunelinkConnection {
 
         const result = ServerToClientMessageSchema.safeParse(data);
         if (!result.success) {
-          const error = new Error(`Invalid message received: ${formatZodError(result.error)}`);
+          const error = new Error(
+            `Invalid message received: ${formatZodError(result.error)}`
+          );
           this.onError?.(error);
           return;
         }
