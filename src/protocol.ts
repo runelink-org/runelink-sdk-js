@@ -51,7 +51,7 @@ function dataVariant<Type extends string, Schema extends z.ZodType>(
 
 const TargetHostSchema = z.string();
 
-export const ClientWsConnectionStateSchema = z.discriminatedUnion("type", [
+export const WsConnectionStateSchema = z.discriminatedUnion("type", [
   unitVariant("unauthenticated"),
   dataVariant(
     "authenticated",
@@ -65,7 +65,7 @@ export const AuthTokenAccessRequestSchema = z.object({
   access_token: z.string(),
 });
 
-export const ClientWsRequestSchema = z.discriminatedUnion("type", [
+export const WsRequestSchema = z.discriminatedUnion("type", [
   unitVariant("ping"),
   unitVariant("oidc_discovery"),
   unitVariant("oidc_jwks"),
@@ -260,14 +260,14 @@ export const ClientWsRequestSchema = z.discriminatedUnion("type", [
   ),
 ]);
 
-export const ClientWsReplySchema = z.discriminatedUnion("type", [
+export const WsReplySchema = z.discriminatedUnion("type", [
   unitVariant("pong"),
   dataVariant("oidc_discovery", OidcDiscoveryDocumentSchema),
   dataVariant("oidc_jwks", JwksResponseSchema),
-  dataVariant("connection_state", ClientWsConnectionStateSchema),
+  dataVariant("connection_state", WsConnectionStateSchema),
   dataVariant("auth_signup", UserSchema),
   dataVariant("auth_token", TokenResponseSchema),
-  dataVariant("auth_token_access", ClientWsConnectionStateSchema),
+  dataVariant("auth_token_access", WsConnectionStateSchema),
   dataVariant("users_create", UserSchema),
   dataVariant("users_get_all", z.array(UserSchema)),
   dataVariant("users_get_by_ref", UserSchema),
@@ -296,7 +296,7 @@ export const ClientWsReplySchema = z.discriminatedUnion("type", [
   unitVariant("messages_delete"),
 ]);
 
-export const ClientWsUpdateSchema = z.discriminatedUnion("type", [
+export const WsUpdateSchema = z.discriminatedUnion("type", [
   dataVariant("user_upserted", UserSchema),
   dataVariant(
     "user_deleted",
@@ -338,24 +338,24 @@ export const ClientWsUpdateSchema = z.discriminatedUnion("type", [
   ),
 ]);
 
-export const ClientWsRequestEnvelopeSchema = z.object({
+export const WsRequestEnvelopeSchema = z.object({
   type: z.literal("request"),
   data: z.object({
     request_id: RequestIdSchema,
-    request: ClientWsRequestSchema,
+    request: WsRequestSchema,
   }),
 });
 
-export const ClientWsReplyEnvelopeSchema = z.object({
+export const WsReplyEnvelopeSchema = z.object({
   type: z.literal("reply"),
   data: z.object({
     request_id: RequestIdSchema,
     event_id: EventIdSchema,
-    reply: ClientWsReplySchema,
+    reply: WsReplySchema,
   }),
 });
 
-export const ClientWsErrorEnvelopeSchema = z.object({
+export const WsErrorEnvelopeSchema = z.object({
   type: z.literal("error"),
   data: z.object({
     request_id: RequestIdSchema.nullable(),
@@ -364,39 +364,33 @@ export const ClientWsErrorEnvelopeSchema = z.object({
   }),
 });
 
-export const ClientWsUpdateEnvelopeSchema = z.object({
+export const WsUpdateEnvelopeSchema = z.object({
   type: z.literal("update"),
   data: z.object({
     event_id: EventIdSchema,
-    update: ClientWsUpdateSchema,
+    update: WsUpdateSchema,
   }),
 });
 
-export const ClientWsEnvelopeSchema = z.discriminatedUnion("type", [
-  ClientWsRequestEnvelopeSchema,
-  ClientWsReplyEnvelopeSchema,
-  ClientWsErrorEnvelopeSchema,
-  ClientWsUpdateEnvelopeSchema,
+export const WsEnvelopeSchema = z.discriminatedUnion("type", [
+  WsRequestEnvelopeSchema,
+  WsReplyEnvelopeSchema,
+  WsErrorEnvelopeSchema,
+  WsUpdateEnvelopeSchema,
 ]);
 
 export type RequestId = z.infer<typeof RequestIdSchema>;
 export type EventId = z.infer<typeof EventIdSchema>;
 export type WsError = z.infer<typeof WsErrorSchema>;
-export type ClientWsConnectionState = z.infer<
-  typeof ClientWsConnectionStateSchema
->;
+export type WsConnectionState = z.infer<typeof WsConnectionStateSchema>;
 export type AuthTokenAccessRequest = z.infer<
   typeof AuthTokenAccessRequestSchema
 >;
-export type ClientWsRequest = z.infer<typeof ClientWsRequestSchema>;
-export type ClientWsReply = z.infer<typeof ClientWsReplySchema>;
-export type ClientWsUpdate = z.infer<typeof ClientWsUpdateSchema>;
-export type ClientWsRequestEnvelope = z.infer<
-  typeof ClientWsRequestEnvelopeSchema
->;
-export type ClientWsReplyEnvelope = z.infer<typeof ClientWsReplyEnvelopeSchema>;
-export type ClientWsErrorEnvelope = z.infer<typeof ClientWsErrorEnvelopeSchema>;
-export type ClientWsUpdateEnvelope = z.infer<
-  typeof ClientWsUpdateEnvelopeSchema
->;
-export type ClientWsEnvelope = z.infer<typeof ClientWsEnvelopeSchema>;
+export type WsRequest = z.infer<typeof WsRequestSchema>;
+export type WsReply = z.infer<typeof WsReplySchema>;
+export type WsUpdate = z.infer<typeof WsUpdateSchema>;
+export type WsRequestEnvelope = z.infer<typeof WsRequestEnvelopeSchema>;
+export type WsReplyEnvelope = z.infer<typeof WsReplyEnvelopeSchema>;
+export type WsErrorEnvelope = z.infer<typeof WsErrorEnvelopeSchema>;
+export type WsUpdateEnvelope = z.infer<typeof WsUpdateEnvelopeSchema>;
+export type WsEnvelope = z.infer<typeof WsEnvelopeSchema>;

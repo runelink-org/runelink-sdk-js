@@ -56,10 +56,10 @@ console.log(reply);
 
 - `connect()` opens the websocket connection
 - `disconnect()` closes the connection and stops reconnect attempts
-- `send(request)` sends a validated `ClientWsRequest` and returns a promise for the matching `ClientWsReply`
+- `send(request)` sends a validated `WsRequest` and returns a promise for the matching `WsReply`
 - `getStatus()` returns one of `disconnected`, `connecting`, `connected`, or `reconnecting`
 - `subscribeStatus(listener)` lets applications observe connection lifecycle changes
-- `onUpdate(listener)` subscribes to validated `ClientWsUpdate` push events
+- `onUpdate(listener)` subscribes to validated `WsUpdate` push events
 - `onError(listener)` subscribes to connection, parsing, validation, and request errors
 
 ## Reconnection
@@ -84,8 +84,8 @@ The SDK exports both schemas and inferred TypeScript types from `src/schema` and
 Examples include:
 
 - `UserSchema`, `ServerSchema`, `ChannelSchema`, `MessageSchema`
-- `ClientWsRequestSchema`, `ClientWsReplySchema`, `ClientWsUpdateSchema`
-- `ClientWsEnvelopeSchema`
+- `WsRequestSchema`, `WsReplySchema`, `WsUpdateSchema`
+- `WsEnvelopeSchema`
 
 ## License
 

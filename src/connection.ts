@@ -1,16 +1,16 @@
 import type { ZodError } from "zod";
 import { z } from "zod";
 import {
-  type ClientWsReply,
-  type ClientWsRequest,
-  type ClientWsUpdate,
-  ClientWsErrorEnvelopeSchema,
-  ClientWsReplyEnvelopeSchema,
-  ClientWsRequestEnvelopeSchema,
-  ClientWsRequestSchema,
-  ClientWsUpdateEnvelopeSchema,
+  type WsReply,
+  type WsRequest,
+  type WsUpdate,
+  WsErrorEnvelopeSchema,
+  WsReplyEnvelopeSchema,
+  WsRequestEnvelopeSchema,
+  WsRequestSchema,
+  WsUpdateEnvelopeSchema,
 } from "./protocol";
-import { getClientWsUrl } from "./util";
+import { getWsUrl } from "./util";
 
 const DEFAULT_RECONNECT_INITIAL_DELAY_MS = 1_000;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30_000;
@@ -18,13 +18,13 @@ const DEFAULT_RECONNECT_BACKOFF_MULTIPLIER = 2;
 const DEFAULT_RECONNECT_JITTER_RATIO = 0.2;
 
 const IncomingEnvelopeSchema = z.discriminatedUnion("type", [
-  ClientWsReplyEnvelopeSchema,
-  ClientWsErrorEnvelopeSchema,
-  ClientWsUpdateEnvelopeSchema,
+  WsReplyEnvelopeSchema,
+  WsErrorEnvelopeSchema,
+  WsUpdateEnvelopeSchema,
 ]);
 
 type PendingRequest = {
-  resolve: (reply: ClientWsReply) => void;
+  resolve: (reply: WsReply) => void;
   reject: (error: Error) => void;
 };
 
@@ -125,7 +125,7 @@ export class RunelinkConnection {
   private manualDisconnect = false;
   private pendingRequests = new Map<string, PendingRequest>();
   private statusListeners = new Set<Listener<RunelinkConnectionStatus>>();
-  private updateListeners = new Set<Listener<ClientWsUpdate>>();
+  private updateListeners = new Set<Listener<WsUpdate>>();
   private errorListeners = new Set<Listener<Error>>();
 
   /**
@@ -137,7 +137,7 @@ export class RunelinkConnection {
     options: RunelinkConnectionOptions = {},
     mode: "host" | "url" = "host"
   ) {
-    this.url = mode === "url" ? hostOrUrl : getClientWsUrl(hostOrUrl);
+    this.url = mode === "url" ? hostOrUrl : getWsUrl(hostOrUrl);
     this.options = normalizeOptions(options);
   }
 
@@ -185,8 +185,8 @@ export class RunelinkConnection {
     this.setStatus("disconnected");
   }
 
-  async send(message: ClientWsRequest): Promise<ClientWsReply> {
-    const result = ClientWsRequestSchema.safeParse(message);
+  async send(message: WsRequest): Promise<WsReply> {
+    const result = WsRequestSchema.safeParse(message);
     if (!result.success) {
       throw new Error(`Invalid message: ${formatZodError(result.error)}`);
     }
@@ -198,7 +198,7 @@ export class RunelinkConnection {
     }
 
     const requestId = crypto.randomUUID();
-    const envelope = ClientWsRequestEnvelopeSchema.parse({
+    const envelope = WsRequestEnvelopeSchema.parse({
       type: "request",
       data: {
         request_id: requestId,
@@ -231,7 +231,7 @@ export class RunelinkConnection {
     };
   }
 
-  onUpdate(listener: Listener<ClientWsUpdate>): () => void {
+  onUpdate(listener: Listener<WsUpdate>): () => void {
     this.updateListeners.add(listener);
     return () => {
       this.updateListeners.delete(listener);
@@ -432,7 +432,7 @@ export class RunelinkConnection {
     }
   }
 
-  private emitUpdate(update: ClientWsUpdate): void {
+  private emitUpdate(update: WsUpdate): void {
     for (const listener of this.updateListeners) {
       listener(update);
     }

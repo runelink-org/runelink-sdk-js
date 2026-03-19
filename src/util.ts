@@ -34,10 +34,6 @@ export function getApiUrl(host: string): string {
   return `http://${padHost(host)}`;
 }
 
-export function getClientWsUrl(host: string): string {
+export function getWsUrl(host: string): string {
   return `ws://${padHost(host)}/ws/client`;
-}
-
-export function getFederationWsUrl(host: string): string {
-  return `ws://${padHost(host)}/ws/federation`;
 }
