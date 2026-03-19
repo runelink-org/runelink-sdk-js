@@ -10,6 +10,7 @@ import {
   ClientWsRequestSchema,
   ClientWsUpdateEnvelopeSchema,
 } from "./protocol";
+import { getClientWsUrl } from "./util";
 
 const DEFAULT_RECONNECT_INITIAL_DELAY_MS = 1_000;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30_000;
@@ -127,8 +128,16 @@ export class RunelinkConnection {
   private updateListeners = new Set<Listener<ClientWsUpdate>>();
   private errorListeners = new Set<Listener<Error>>();
 
-  constructor(url: string, options: RunelinkConnectionOptions = {}) {
-    this.url = url;
+  /**
+   * Creates a connection from a RuneLink host by default. Pass `mode: "url"`
+   * to use a precomputed websocket URL directly.
+   */
+  constructor(
+    hostOrUrl: string,
+    options: RunelinkConnectionOptions = {},
+    mode: "host" | "url" = "host"
+  ) {
+    this.url = mode === "url" ? hostOrUrl : getClientWsUrl(hostOrUrl);
     this.options = normalizeOptions(options);
   }
 
