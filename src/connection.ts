@@ -1,8 +1,9 @@
 import {
-  type ClientToServerMessage,
-  type ServerToClientMessage,
-  ClientToServerMessageSchema,
-  ServerToClientMessageSchema,
+  type ClientWsRequest,
+  type ClientWsServerEnvelope,
+  ClientWsRequestSchema,
+  ClientWsRequestEnvelopeSchema,
+  ClientWsServerEnvelopeSchema,
 } from "./protocol";
 import type { ZodError } from "zod";
 
@@ -41,23 +42,41 @@ export class RunelinkConnection {
     }
   }
 
-  send(message: ClientToServerMessage): void {
+  send(message: ClientWsRequest): string {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error("WebSocket is not connected");
     }
 
-    const result = ClientToServerMessageSchema.safeParse(message);
+    const result = ClientWsRequestSchema.safeParse(message);
     if (!result.success) {
       throw new Error(`Invalid message: ${formatZodError(result.error)}`);
     }
 
-    this.ws.send(JSON.stringify(message));
+    const envelope = ClientWsRequestEnvelopeSchema.parse({
+      type: "request",
+      data: {
+        request_id: crypto.randomUUID(),
+        request: result.data,
+      },
+    });
+
+    this.ws.send(JSON.stringify(envelope));
+
+    return envelope.data.request_id;
   }
 
-  onMessage(handler: (message: ServerToClientMessage) => void): void {
+  onMessage(handler: (message: ClientWsServerEnvelope) => void): void {
     if (this.ws) {
       this.ws.onmessage = (event) => {
         let data: unknown;
+        if (typeof event.data !== "string") {
+          const error = new Error(
+            `Unsupported websocket message type: ${typeof event.data}`
+          );
+          this.onError?.(error);
+          return;
+        }
+
         try {
           data = JSON.parse(event.data);
         } catch (e) {
@@ -68,7 +87,7 @@ export class RunelinkConnection {
           return;
         }
 
-        const result = ServerToClientMessageSchema.safeParse(data);
+        const result = ClientWsServerEnvelopeSchema.safeParse(data);
         if (!result.success) {
           const error = new Error(
             `Invalid message received: ${formatZodError(result.error)}`
