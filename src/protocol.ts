@@ -379,12 +379,6 @@ export const ClientWsEnvelopeSchema = z.discriminatedUnion("type", [
   ClientWsUpdateEnvelopeSchema,
 ]);
 
-export const ClientWsServerEnvelopeSchema = z.discriminatedUnion("type", [
-  ClientWsReplyEnvelopeSchema,
-  ClientWsErrorEnvelopeSchema,
-  ClientWsUpdateEnvelopeSchema,
-]);
-
 export type RequestId = z.infer<typeof RequestIdSchema>;
 export type EventId = z.infer<typeof EventIdSchema>;
 export type WsError = z.infer<typeof WsErrorSchema>;
@@ -406,12 +400,3 @@ export type ClientWsUpdateEnvelope = z.infer<
   typeof ClientWsUpdateEnvelopeSchema
 >;
 export type ClientWsEnvelope = z.infer<typeof ClientWsEnvelopeSchema>;
-export type ClientWsServerEnvelope = z.infer<
-  typeof ClientWsServerEnvelopeSchema
->;
-
-export const ClientToServerMessageSchema = ClientWsRequestEnvelopeSchema;
-export const ServerToClientMessageSchema = ClientWsServerEnvelopeSchema;
-
-export type ClientToServerMessage = ClientWsRequestEnvelope;
-export type ServerToClientMessage = ClientWsServerEnvelope;
