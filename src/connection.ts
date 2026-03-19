@@ -116,6 +116,7 @@ export class RunelinkConnection {
   private url: string;
   private options: NormalizedRunelinkConnectionOptions;
   private ws: WebSocket | null = null;
+  private hasConnectedOnce = false;
   private connectPromise: Promise<void> | null = null;
   private connectPromiseResolve: (() => void) | null = null;
   private connectPromiseReject: ((error: Error) => void) | null = null;
@@ -254,11 +255,16 @@ export class RunelinkConnection {
     let opened = false;
 
     this.ws = ws;
-    this.setStatus(this.reconnectAttempt > 0 ? "reconnecting" : "connecting");
+    this.setStatus(
+      this.hasConnectedOnce && this.reconnectAttempt > 0
+        ? "reconnecting"
+        : "connecting"
+    );
 
     ws.onopen = () => {
       if (this.ws !== ws) return;
       opened = true;
+      this.hasConnectedOnce = true;
       this.clearReconnectTimer();
       this.reconnectAttempt = 0;
       this.setStatus("connected");
@@ -276,9 +282,9 @@ export class RunelinkConnection {
     };
 
     ws.onclose = (event) => {
-      if (this.ws === ws) {
-        this.ws = null;
-      }
+      if (this.ws !== ws) return;
+
+      this.ws = null;
 
       if (this.manualDisconnect) {
         this.reconnectAttempt = 0;
@@ -376,7 +382,7 @@ export class RunelinkConnection {
   private scheduleReconnect(): void {
     this.clearReconnectTimer();
     this.reconnectAttempt += 1;
-    this.setStatus("reconnecting");
+    this.setStatus(this.hasConnectedOnce ? "reconnecting" : "connecting");
     const delayMs = this.calculateReconnectDelay(this.reconnectAttempt);
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
