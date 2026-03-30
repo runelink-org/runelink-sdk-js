@@ -30,10 +30,10 @@ export function hostFromIssuer(issuer: string): string {
   return stripDefaultPort(host);
 }
 
-export function getApiUrl(host: string): string {
-  return `http://${padHost(host)}`;
+export function getApiUrl(host: string, secure: boolean): string {
+  return `${secure ? "https" : "http"}://${padHost(host)}`;
 }
 
-export function getWsUrl(host: string): string {
-  return `ws://${padHost(host)}/ws/client`;
+export function getWsUrl(host: string, secure: boolean): string {
+  return `${secure ? "wss" : "ws"}://${padHost(host)}/ws/client`;
 }

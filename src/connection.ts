@@ -43,6 +43,7 @@ export type RunelinkConnectionOptions = {
   reconnectBackoffMultiplier?: number;
   reconnectJitterRatio?: number;
   maxReconnectAttempts?: number | null;
+  transportSecurity?: "secure-only" | "prefer-secure";
 };
 
 type NormalizedRunelinkConnectionOptions = {
@@ -52,7 +53,10 @@ type NormalizedRunelinkConnectionOptions = {
   reconnectBackoffMultiplier: number;
   reconnectJitterRatio: number;
   maxReconnectAttempts: number | null;
+  transportSecurity: "secure-only" | "prefer-secure";
 };
+
+type ConnectionMode = "host" | "url";
 
 export class RunelinkRequestError extends Error {
   code: string;
@@ -109,12 +113,19 @@ function normalizeOptions(
     reconnectBackoffMultiplier,
     reconnectJitterRatio,
     maxReconnectAttempts,
+    transportSecurity: options.transportSecurity ?? "prefer-secure",
   };
 }
 
+function isSecureWebsocketUrl(url: string): boolean {
+  return url.startsWith("wss://");
+}
+
 export class RunelinkConnection {
-  private url: string;
+  private hostOrUrl: string;
+  private mode: ConnectionMode;
   private options: NormalizedRunelinkConnectionOptions;
+  private activeUrl: string | null = null;
   private ws: WebSocket | null = null;
   private hasConnectedOnce = false;
   private connectPromise: Promise<void> | null = null;
@@ -138,7 +149,8 @@ export class RunelinkConnection {
     options: RunelinkConnectionOptions = {},
     mode: "host" | "url" = "host"
   ) {
-    this.url = mode === "url" ? hostOrUrl : getWsUrl(hostOrUrl);
+    this.hostOrUrl = hostOrUrl;
+    this.mode = mode;
     this.options = normalizeOptions(options);
   }
 
@@ -251,7 +263,8 @@ export class RunelinkConnection {
       return;
     }
 
-    const ws = new WebSocket(this.url);
+    const url = this.getNextConnectionUrl();
+    const ws = new WebSocket(url);
     let opened = false;
 
     this.ws = ws;
@@ -295,6 +308,9 @@ export class RunelinkConnection {
       const closeError = new Error(this.formatCloseReason(event));
 
       if (!opened) {
+        if (this.tryFallbackTransport(url)) {
+          return;
+        }
         if (this.shouldReconnect()) {
           this.emitError(closeError);
           this.scheduleReconnect();
@@ -319,6 +335,39 @@ export class RunelinkConnection {
       this.reconnectAttempt = 0;
       this.setStatus("disconnected");
     };
+  }
+
+  private getNextConnectionUrl(): string {
+    if (this.activeUrl) {
+      return this.activeUrl;
+    }
+
+    if (this.mode === "url") {
+      this.activeUrl = this.hostOrUrl;
+      return this.activeUrl;
+    }
+
+    this.activeUrl = getWsUrl(this.hostOrUrl, true);
+    return this.activeUrl;
+  }
+
+  private tryFallbackTransport(previousUrl: string): boolean {
+    if (
+      this.mode !== "host" ||
+      this.options.transportSecurity !== "prefer-secure" ||
+      !isSecureWebsocketUrl(previousUrl)
+    ) {
+      return false;
+    }
+
+    const fallbackUrl = getWsUrl(this.hostOrUrl, false);
+    if (fallbackUrl === previousUrl) {
+      return false;
+    }
+
+    this.activeUrl = fallbackUrl;
+    this.openSocket();
+    return true;
   }
 
   private handleMessage(event: MessageEvent): void {
