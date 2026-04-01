@@ -125,7 +125,7 @@ export const WsRequestSchema = z.discriminatedUnion("type", [
     })
   ),
   dataVariant(
-    "memberships_create",
+    "memberships_upsert",
     z.object({
       server_id: z.uuid(),
       new_membership: NewServerMembershipSchema,
@@ -276,7 +276,7 @@ export const WsReplySchema = z.discriminatedUnion("type", [
   dataVariant("memberships_get_by_user", z.array(ServerMembershipSchema)),
   dataVariant("memberships_get_members_by_server", z.array(ServerMemberSchema)),
   dataVariant("memberships_get_by_user_and_server", ServerMemberSchema),
-  dataVariant("memberships_create", FullServerMembershipSchema),
+  dataVariant("memberships_upsert", FullServerMembershipSchema),
   unitVariant("memberships_delete"),
   dataVariant("servers_create", ServerSchema),
   dataVariant("servers_get_all", z.array(ServerSchema)),
