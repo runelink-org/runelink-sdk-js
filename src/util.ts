@@ -1,3 +1,5 @@
+export const MAX_USERNAME_LENGTH = 32;
+
 export function normalizeUsername(input: string): string {
   return input
     .trim()
@@ -21,6 +23,12 @@ export function validateUsername(input: string): string {
 
   if (!normalized) {
     throw new Error("Username cannot be empty.");
+  }
+
+  if (normalized.length > MAX_USERNAME_LENGTH) {
+    throw new Error(
+      `Username cannot be longer than ${MAX_USERNAME_LENGTH} characters.`
+    );
   }
 
   return normalized;
