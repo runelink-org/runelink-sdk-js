@@ -9,13 +9,25 @@ import {
   WsRequestEnvelopeSchema,
   WsRequestSchema,
   WsUpdateEnvelopeSchema,
+  WsHelloEnvelopeSchema,
+  WsWelcomeEnvelopeSchema,
 } from "./protocol";
+import {
+  CLIENT_WS_SUPPORTED_CAPABILITIES,
+  NEGOTIATION_VERSION,
+  type NegotiatedCapabilities,
+  type SupportedCapabilities,
+  SupportedCapabilitiesSchema,
+  requestCapability,
+  updateCapability,
+} from "./capability";
 import { getWsUrl } from "./util";
 
 const DEFAULT_RECONNECT_INITIAL_DELAY_MS = 1_000;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30_000;
 const DEFAULT_RECONNECT_BACKOFF_MULTIPLIER = 2;
 const DEFAULT_RECONNECT_JITTER_RATIO = 0.2;
+const NEGOTIATION_TIMEOUT_MS = 5_000;
 
 const IncomingEnvelopeSchema = z.discriminatedUnion("type", [
   WsReplyEnvelopeSchema,
@@ -44,6 +56,7 @@ export type RunelinkConnectionOptions = {
   reconnectJitterRatio?: number;
   maxReconnectAttempts?: number | null;
   transportSecurity?: "secure-only" | "prefer-secure";
+  capabilities?: SupportedCapabilities;
 };
 
 type NormalizedRunelinkConnectionOptions = {
@@ -54,6 +67,7 @@ type NormalizedRunelinkConnectionOptions = {
   reconnectJitterRatio: number;
   maxReconnectAttempts: number | null;
   transportSecurity: "secure-only" | "prefer-secure";
+  capabilities: SupportedCapabilities;
 };
 
 type ConnectionMode = "host" | "url";
@@ -106,6 +120,28 @@ function normalizeOptions(
       ? null
       : Math.max(0, options.maxReconnectAttempts);
 
+  const parsedCapabilities = SupportedCapabilitiesSchema.parse(
+    options.capabilities ?? CLIENT_WS_SUPPORTED_CAPABILITIES
+  );
+  const capabilities = SupportedCapabilitiesSchema.parse(
+    Object.fromEntries(
+      Object.entries(parsedCapabilities).filter(
+        ([, versions]) => versions.length > 0
+      )
+    )
+  );
+  for (const [capability, versions] of Object.entries(capabilities)) {
+    const implementedVersions = CLIENT_WS_SUPPORTED_CAPABILITIES[capability];
+    if (
+      implementedVersions === undefined ||
+      versions.some((version) => !implementedVersions.includes(version))
+    ) {
+      throw new Error(
+        `Capability ${capability} includes a version not implemented by this SDK`
+      );
+    }
+  }
+
   return {
     autoReconnect: options.autoReconnect ?? true,
     reconnectInitialDelayMs,
@@ -114,6 +150,7 @@ function normalizeOptions(
     reconnectJitterRatio,
     maxReconnectAttempts,
     transportSecurity: options.transportSecurity ?? "prefer-secure",
+    capabilities,
   };
 }
 
@@ -139,6 +176,8 @@ export class RunelinkConnection {
   private statusListeners = new Set<Listener<RunelinkConnectionStatus>>();
   private updateListeners = new Set<Listener<WsUpdate>>();
   private errorListeners = new Set<Listener<Error>>();
+  private negotiationTimer: ReturnType<typeof setTimeout> | null = null;
+  private negotiatedCapabilities: NegotiatedCapabilities | null = null;
 
   /**
    * Creates a connection from a RuneLink host by default. Pass `mode: "url"`
@@ -157,7 +196,10 @@ export class RunelinkConnection {
   connect(): Promise<void> {
     this.manualDisconnect = false;
 
-    if (this.ws?.readyState === WebSocket.OPEN) {
+    if (
+      this.ws?.readyState === WebSocket.OPEN &&
+      this.negotiatedCapabilities !== null
+    ) {
       this.setStatus("connected");
       return Promise.resolve();
     }
@@ -166,11 +208,19 @@ export class RunelinkConnection {
       return this.connectPromise;
     }
 
-    this.clearReconnectTimer();
+    const shouldOpen =
+      !this.ws ||
+      this.ws.readyState === WebSocket.CLOSING ||
+      this.ws.readyState === WebSocket.CLOSED;
     const connectPromise = new Promise<void>((resolve, reject) => {
       this.connectPromiseResolve = resolve;
       this.connectPromiseReject = reject;
-      this.openSocket();
+      if (shouldOpen) {
+        this.clearReconnectTimer();
+        this.clearNegotiationTimer();
+        this.negotiatedCapabilities = null;
+        this.openSocket();
+      }
     }).finally(() => {
       this.clearConnectPromise();
     });
@@ -182,6 +232,8 @@ export class RunelinkConnection {
   disconnect(): void {
     this.manualDisconnect = true;
     this.clearReconnectTimer();
+    this.clearNegotiationTimer();
+    this.negotiatedCapabilities = null;
     this.rejectConnectPromise(
       new Error("WebSocket connection attempt cancelled")
     );
@@ -210,6 +262,27 @@ export class RunelinkConnection {
       throw new Error("WebSocket is not connected");
     }
 
+    const capability = requestCapability(result.data);
+    const capabilityVersion = CLIENT_WS_SUPPORTED_CAPABILITIES[capability]?.[0];
+    if (capabilityVersion === undefined) {
+      throw new Error(
+        `This client does not support the ${capability} capability`
+      );
+    }
+    if (
+      this.options.capabilities[capability]?.includes(capabilityVersion) !==
+      true
+    ) {
+      throw new Error(
+        `This client does not support the ${capability} capability`
+      );
+    }
+    if (this.negotiatedCapabilities?.[capability] !== capabilityVersion) {
+      throw new Error(
+        `${this.hostOrUrl} does not support the ${capability} capability`
+      );
+    }
+
     const requestId = crypto.randomUUID();
     const envelope = WsRequestEnvelopeSchema.parse({
       type: "request",
@@ -234,6 +307,12 @@ export class RunelinkConnection {
 
   getStatus(): RunelinkConnectionStatus {
     return this.status;
+  }
+
+  getNegotiatedCapabilities(): NegotiatedCapabilities | null {
+    return this.negotiatedCapabilities
+      ? { ...this.negotiatedCapabilities }
+      : null;
   }
 
   subscribeStatus(listener: Listener<RunelinkConnectionStatus>): () => void {
@@ -277,11 +356,20 @@ export class RunelinkConnection {
     ws.onopen = () => {
       if (this.ws !== ws) return;
       opened = true;
-      this.hasConnectedOnce = true;
       this.clearReconnectTimer();
-      this.reconnectAttempt = 0;
-      this.setStatus("connected");
-      this.resolveConnectPromise();
+      const hello = WsHelloEnvelopeSchema.parse({
+        type: "hello",
+        data: {
+          negotiation_version: NEGOTIATION_VERSION,
+          capabilities: this.options.capabilities,
+        },
+      });
+      ws.send(JSON.stringify(hello));
+      this.negotiationTimer = setTimeout(() => {
+        if (this.ws === ws && this.negotiatedCapabilities === null) {
+          ws.close(1002, "Capability negotiation timed out");
+        }
+      }, NEGOTIATION_TIMEOUT_MS);
     };
 
     ws.onmessage = (event) => {
@@ -298,6 +386,8 @@ export class RunelinkConnection {
       if (this.ws !== ws) return;
 
       this.ws = null;
+      this.clearNegotiationTimer();
+      this.negotiatedCapabilities = null;
 
       if (this.manualDisconnect) {
         this.reconnectAttempt = 0;
@@ -334,6 +424,7 @@ export class RunelinkConnection {
 
       this.reconnectAttempt = 0;
       this.setStatus("disconnected");
+      this.rejectConnectPromise(closeError);
     };
   }
 
@@ -374,6 +465,28 @@ export class RunelinkConnection {
     const data = this.parseEventData(event);
     if (data === null) return;
 
+    if (this.negotiatedCapabilities === null) {
+      const result = WsWelcomeEnvelopeSchema.safeParse(data);
+      if (
+        !result.success ||
+        !Object.entries(result.data.data.capabilities).every(
+          ([id, version]) =>
+            this.options.capabilities[id]?.includes(version) === true
+        )
+      ) {
+        this.emitError(new Error("Invalid capability negotiation response"));
+        this.ws?.close(1002, "Invalid capability negotiation response");
+        return;
+      }
+      this.negotiatedCapabilities = result.data.data.capabilities;
+      this.clearNegotiationTimer();
+      this.hasConnectedOnce = true;
+      this.reconnectAttempt = 0;
+      this.setStatus("connected");
+      this.resolveConnectPromise();
+      return;
+    }
+
     const result = IncomingEnvelopeSchema.safeParse(data);
     if (!result.success) {
       this.emitError(
@@ -384,6 +497,14 @@ export class RunelinkConnection {
 
     const envelope = result.data;
     if (envelope.type === "update") {
+      const capability = updateCapability(envelope.data.update);
+      const version = CLIENT_WS_SUPPORTED_CAPABILITIES[capability][0];
+      if (this.negotiatedCapabilities[capability] !== version) {
+        this.emitError(
+          new Error(`Received update for unnegotiated capability ${capability}`)
+        );
+        return;
+      }
       this.emitUpdate(envelope.data.update);
       return;
     }
@@ -484,6 +605,13 @@ export class RunelinkConnection {
     this.status = status;
     for (const listener of this.statusListeners) {
       listener(status);
+    }
+  }
+
+  private clearNegotiationTimer(): void {
+    if (this.negotiationTimer) {
+      clearTimeout(this.negotiationTimer);
+      this.negotiationTimer = null;
     }
   }
 
