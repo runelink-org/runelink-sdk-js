@@ -21,8 +21,7 @@ import {
   UserRefSchema,
   UserSchema,
 } from "./schema";
-
-export const PROTOCOL_VERSION = "1.0.0";
+import { CapabilityHelloSchema, CapabilityWelcomeSchema } from "./capability";
 
 export const RequestIdSchema = z.uuid();
 export const EventIdSchema = z.uuid();
@@ -346,6 +345,16 @@ export const WsRequestEnvelopeSchema = z.object({
   }),
 });
 
+export const WsHelloEnvelopeSchema = dataVariant(
+  "hello",
+  CapabilityHelloSchema
+);
+
+export const WsWelcomeEnvelopeSchema = dataVariant(
+  "welcome",
+  CapabilityWelcomeSchema
+);
+
 export const WsReplyEnvelopeSchema = z.object({
   type: z.literal("reply"),
   data: z.object({
@@ -373,6 +382,8 @@ export const WsUpdateEnvelopeSchema = z.object({
 });
 
 export const WsEnvelopeSchema = z.discriminatedUnion("type", [
+  WsHelloEnvelopeSchema,
+  WsWelcomeEnvelopeSchema,
   WsRequestEnvelopeSchema,
   WsReplyEnvelopeSchema,
   WsErrorEnvelopeSchema,
@@ -390,6 +401,8 @@ export type WsRequest = z.infer<typeof WsRequestSchema>;
 export type WsReply = z.infer<typeof WsReplySchema>;
 export type WsUpdate = z.infer<typeof WsUpdateSchema>;
 export type WsRequestEnvelope = z.infer<typeof WsRequestEnvelopeSchema>;
+export type WsHelloEnvelope = z.infer<typeof WsHelloEnvelopeSchema>;
+export type WsWelcomeEnvelope = z.infer<typeof WsWelcomeEnvelopeSchema>;
 export type WsReplyEnvelope = z.infer<typeof WsReplyEnvelopeSchema>;
 export type WsErrorEnvelope = z.infer<typeof WsErrorEnvelopeSchema>;
 export type WsUpdateEnvelope = z.infer<typeof WsUpdateEnvelopeSchema>;

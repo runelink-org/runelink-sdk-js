@@ -10,6 +10,7 @@ RuneLink JavaScript SDK is a small TypeScript-first client package for building 
 - Zod schemas and TypeScript types for client websocket requests, replies, updates, errors, and envelopes
 - A `RunelinkConnection` class that:
   - validates outgoing websocket requests
+  - negotiates independent versions for each supported capability
   - validates incoming websocket replies and updates
   - resolves `send()` calls when the matching reply arrives
   - rejects requests when the server returns a websocket error
@@ -54,10 +55,11 @@ console.log(reply);
 
 ## Connection API
 
-- `connect()` opens the websocket connection
+- `connect()` opens the websocket connection and resolves after capability negotiation
 - `disconnect()` closes the connection and stops reconnect attempts
 - `send(request)` sends a validated `WsRequest` and returns a promise for the matching `WsReply`
 - `getStatus()` returns one of `disconnected`, `connecting`, `connected`, or `reconnecting`
+- `getNegotiatedCapabilities()` returns the selected capability versions
 - `subscribeStatus(listener)` lets applications observe connection lifecycle changes
 - `onUpdate(listener)` subscribes to validated `WsUpdate` push events
 - `onError(listener)` subscribes to connection, parsing, validation, and request errors
@@ -76,6 +78,9 @@ Available options:
 - `reconnectBackoffMultiplier`
 - `reconnectJitterRatio`
 - `maxReconnectAttempts`
+- `capabilities`
+
+The SDK offers version 1 of every current client capability by default. Pass a reduced `capabilities` map when a specialized client only implements part of the protocol. Requests whose capability was not negotiated fail locally without closing the connection.
 
 ## Working with types and schemas
 
