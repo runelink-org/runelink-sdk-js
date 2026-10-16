@@ -80,7 +80,7 @@ Available options:
 - `maxReconnectAttempts`
 - `capabilities`
 
-The SDK offers version 1 of every current client capability by default. Pass a reduced `capabilities` map when a specialized client only implements part of the protocol. Requests whose capability was not negotiated fail locally without closing the connection.
+Capability versions use CalVer: `YYYY.MM.DD`, with an optional `.N` revision for additional versions on the same day (for example `2026.10.16.1`). The SDK offers every client capability version it implements by default. Pass a reduced `capabilities` map when a specialized client only implements part of the protocol. Requests whose capability was not negotiated fail locally without closing the connection.
 
 ## Working with types and schemas
 

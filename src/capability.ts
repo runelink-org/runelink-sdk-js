@@ -3,7 +3,14 @@ import type { WsRequest, WsUpdate } from "./protocol";
 
 export const NEGOTIATION_VERSION = 1;
 
-export const CapabilityVersionSchema = z.number().int().positive().max(65_535);
+// CalVer: `YYYY.MM.DD`, with an optional `.N` revision for additional versions on
+// the same day. Each version has exactly one spelling, so versions compare by
+// string equality.
+// Dates are not checked against the calendar, and revisions fit in 16 bits.
+export const CapabilityVersionSchema = z
+  .string()
+  .regex(/^\d{4}\.(0[1-9]|1[0-2])\.(0[1-9]|[12]\d|3[01])(\.[1-9]\d{0,4})?$/)
+  .refine((version) => Number(version.split(".")[3] ?? 0) <= 65_535);
 
 export const SupportedCapabilitiesSchema = z.record(
   z.string(),
@@ -30,7 +37,7 @@ export type NegotiatedCapabilities = z.infer<
   typeof NegotiatedCapabilitiesSchema
 >;
 
-function freezeCapabilities<T extends Record<string, number[]>>(
+function freezeCapabilities<T extends Record<string, string[]>>(
   capabilities: T
 ): Readonly<T> {
   for (const versions of Object.values(capabilities)) Object.freeze(versions);
@@ -40,43 +47,43 @@ function freezeCapabilities<T extends Record<string, number[]>>(
 // All current implemented capability protocol versions
 const capabilityVersion = {
   system: {
-    ping: 1,
-    connectionState: 1,
+    ping: "2026.10.16",
+    connectionState: "2026.10.16",
   },
   auth: {
-    discovery: 1,
-    authenticate: 1,
-    signup: 1,
-    token: 1,
+    discovery: "2026.10.16",
+    authenticate: "2026.10.16",
+    signup: "2026.10.16",
+    token: "2026.10.16",
   },
   users: {
-    create: 1,
-    read: 1,
-    delete: 1,
-    events: 1,
+    create: "2026.10.16",
+    read: "2026.10.16",
+    delete: "2026.10.16",
+    events: "2026.10.16",
   },
   memberships: {
-    read: 1,
-    write: 1,
-    events: 1,
+    read: "2026.10.16",
+    write: "2026.10.16",
+    events: "2026.10.16",
   },
   servers: {
-    create: 1,
-    read: 1,
-    delete: 1,
-    events: 1,
+    create: "2026.10.16",
+    read: "2026.10.16",
+    delete: "2026.10.16",
+    events: "2026.10.16",
   },
   channels: {
-    create: 1,
-    read: 1,
-    delete: 1,
-    events: 1,
+    create: "2026.10.16",
+    read: "2026.10.16",
+    delete: "2026.10.16",
+    events: "2026.10.16",
   },
   messages: {
-    create: 1,
-    read: 1,
-    delete: 1,
-    events: 1,
+    create: "2026.10.16",
+    read: "2026.10.16",
+    delete: "2026.10.16",
+    events: "2026.10.16",
   },
 } as const;
 
