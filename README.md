@@ -60,6 +60,7 @@ console.log(reply);
 - `send(request)` sends a validated `WsRequest` and returns a promise for the matching `WsReply`
 - `getStatus()` returns one of `disconnected`, `connecting`, `connected`, or `reconnecting`
 - `getNegotiatedCapabilities()` returns the selected capability versions
+- `getUnsupportedCapabilities()` returns offered capabilities the host did not agree to
 - `subscribeStatus(listener)` lets applications observe connection lifecycle changes
 - `onUpdate(listener)` subscribes to validated `WsUpdate` push events
 - `onError(listener)` subscribes to connection, parsing, validation, and request errors
@@ -81,6 +82,8 @@ Available options:
 - `capabilities`
 
 Capability versions use CalVer: `YYYY.MM.DD`, with an optional `.N` revision for additional versions on the same day (for example `2026.10.16.1`). The SDK offers every client capability version it implements by default. Pass a reduced `capabilities` map when a specialized client only implements part of the protocol. Requests whose capability was not negotiated fail locally without closing the connection.
+
+If the host rejects capability negotiation, or this client rejects the host's reply, the SDK emits a `RunelinkIncompatibleHostError`. Automatic reconnection stops, because retrying will not help until the host or client is updated.
 
 ## Working with types and schemas
 
