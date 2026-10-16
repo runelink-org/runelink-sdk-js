@@ -28,6 +28,10 @@ const DEFAULT_RECONNECT_MAX_DELAY_MS = 30_000;
 const DEFAULT_RECONNECT_BACKOFF_MULTIPLIER = 2;
 const DEFAULT_RECONNECT_JITTER_RATIO = 0.2;
 const NEGOTIATION_TIMEOUT_MS = 5_000;
+// Close code the host sends when capability negotiation fails. Browsers cannot
+// send it themselves, so local failures close normally and are recorded per
+// socket instead.
+const PROTOCOL_ERROR_CLOSE_CODE = 1002;
 
 const IncomingEnvelopeSchema = z.discriminatedUnion("type", [
   WsReplyEnvelopeSchema,
@@ -82,6 +86,19 @@ export class RunelinkRequestError extends Error {
     this.name = "RunelinkRequestError";
     this.code = code;
     this.details = details;
+  }
+}
+
+/**
+ * The host rejected capability negotiation, or this client rejected the host's
+ * reply. Reconnecting will not help until one side is updated, so automatic
+ * reconnection stops.
+ */
+export class RunelinkIncompatibleHostError extends Error {
+  constructor(host: string, reason: string) {
+    const reasonSuffix = reason.length > 0 ? `: ${reason}` : "";
+    super(`${host} is incompatible with this client${reasonSuffix}`);
+    this.name = "RunelinkIncompatibleHostError";
   }
 }
 
@@ -315,6 +332,18 @@ export class RunelinkConnection {
       : null;
   }
 
+  /**
+   * Capabilities this client offered that the host did not agree to, or null
+   * while not connected.
+   */
+  getUnsupportedCapabilities(): string[] | null {
+    const negotiated = this.negotiatedCapabilities;
+    if (negotiated === null) return null;
+    return Object.keys(this.options.capabilities).filter(
+      (id) => !Object.hasOwn(negotiated, id)
+    );
+  }
+
   subscribeStatus(listener: Listener<RunelinkConnectionStatus>): () => void {
     this.statusListeners.add(listener);
     listener(this.status);
@@ -345,6 +374,7 @@ export class RunelinkConnection {
     const url = this.getNextConnectionUrl();
     const ws = new WebSocket(url);
     let opened = false;
+    let negotiationFailure: string | null = null;
 
     this.ws = ws;
     this.setStatus(
@@ -367,14 +397,21 @@ export class RunelinkConnection {
       ws.send(JSON.stringify(hello));
       this.negotiationTimer = setTimeout(() => {
         if (this.ws === ws && this.negotiatedCapabilities === null) {
-          ws.close(1002, "Capability negotiation timed out");
+          // A slow host is not evidence of incompatibility, so this follows
+          // the normal reconnect path.
+          ws.close(1000, "Capability negotiation timed out");
         }
       }, NEGOTIATION_TIMEOUT_MS);
     };
 
     ws.onmessage = (event) => {
       if (this.ws !== ws) return;
-      this.handleMessage(event);
+      if (this.negotiatedCapabilities !== null) {
+        this.handleMessage(event, this.negotiatedCapabilities);
+      } else if (!this.acceptWelcome(event)) {
+        negotiationFailure = "Invalid capability negotiation response";
+        ws.close(1000, negotiationFailure);
+      }
     };
 
     ws.onerror = (event) => {
@@ -385,6 +422,14 @@ export class RunelinkConnection {
     ws.onclose = (event) => {
       if (this.ws !== ws) return;
 
+      // A 1002 only means an incompatible host during negotiation. Later, it is
+      // an ordinary protocol error that reconnecting can recover from.
+      const failure =
+        negotiationFailure ??
+        (this.negotiatedCapabilities === null &&
+        event.code === PROTOCOL_ERROR_CLOSE_CODE
+          ? event.reason.trim()
+          : null);
       this.ws = null;
       this.clearNegotiationTimer();
       this.negotiatedCapabilities = null;
@@ -415,16 +460,21 @@ export class RunelinkConnection {
       this.rejectAllPendingRequests(
         new Error("WebSocket connection closed before a reply was received")
       );
-      this.emitError(closeError);
 
-      if (this.shouldReconnect()) {
+      const error =
+        failure === null
+          ? closeError
+          : new RunelinkIncompatibleHostError(this.hostOrUrl, failure);
+      this.emitError(error);
+
+      if (failure === null && this.shouldReconnect()) {
         this.scheduleReconnect();
         return;
       }
 
       this.reconnectAttempt = 0;
       this.setStatus("disconnected");
-      this.rejectConnectPromise(closeError);
+      this.rejectConnectPromise(error);
     };
   }
 
@@ -461,31 +511,36 @@ export class RunelinkConnection {
     return true;
   }
 
-  private handleMessage(event: MessageEvent): void {
+  /** Completes negotiation, returning false if the welcome is invalid. */
+  private acceptWelcome(event: MessageEvent): boolean {
+    const result = WsWelcomeEnvelopeSchema.safeParse(
+      this.parseEventData(event)
+    );
+    if (
+      !result.success ||
+      !Object.entries(result.data.data.capabilities).every(
+        ([id, version]) =>
+          Object.hasOwn(this.options.capabilities, id) &&
+          this.options.capabilities[id].includes(version)
+      )
+    ) {
+      return false;
+    }
+    this.negotiatedCapabilities = result.data.data.capabilities;
+    this.clearNegotiationTimer();
+    this.hasConnectedOnce = true;
+    this.reconnectAttempt = 0;
+    this.setStatus("connected");
+    this.resolveConnectPromise();
+    return true;
+  }
+
+  private handleMessage(
+    event: MessageEvent,
+    negotiatedCapabilities: NegotiatedCapabilities
+  ): void {
     const data = this.parseEventData(event);
     if (data === null) return;
-
-    if (this.negotiatedCapabilities === null) {
-      const result = WsWelcomeEnvelopeSchema.safeParse(data);
-      if (
-        !result.success ||
-        !Object.entries(result.data.data.capabilities).every(
-          ([id, version]) =>
-            this.options.capabilities[id]?.includes(version) === true
-        )
-      ) {
-        this.emitError(new Error("Invalid capability negotiation response"));
-        this.ws?.close(1002, "Invalid capability negotiation response");
-        return;
-      }
-      this.negotiatedCapabilities = result.data.data.capabilities;
-      this.clearNegotiationTimer();
-      this.hasConnectedOnce = true;
-      this.reconnectAttempt = 0;
-      this.setStatus("connected");
-      this.resolveConnectPromise();
-      return;
-    }
 
     const result = IncomingEnvelopeSchema.safeParse(data);
     if (!result.success) {
@@ -499,7 +554,7 @@ export class RunelinkConnection {
     if (envelope.type === "update") {
       const capability = updateCapability(envelope.data.update);
       const version = CLIENT_WS_SUPPORTED_CAPABILITIES[capability][0];
-      if (this.negotiatedCapabilities[capability] !== version) {
+      if (negotiatedCapabilities[capability] !== version) {
         this.emitError(
           new Error(`Received update for unnegotiated capability ${capability}`)
         );
