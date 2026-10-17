@@ -241,7 +241,7 @@ export const WsRequestSchema = z.discriminatedUnion("type", [
     })
   ),
   dataVariant(
-    "messages_get_by_channel",
+    "messages_get_by_text_channel",
     z.object({
       text_channel_id: z.uuid(),
       target_host: TargetHostSchema.nullable(),
@@ -295,7 +295,7 @@ export const WsReplySchema = z.discriminatedUnion("type", [
   dataVariant("messages_create", MessageSchema),
   dataVariant("messages_get_all", z.array(MessageSchema)),
   dataVariant("messages_get_by_server", z.array(MessageSchema)),
-  dataVariant("messages_get_by_channel", z.array(MessageSchema)),
+  dataVariant("messages_get_by_text_channel", z.array(MessageSchema)),
   dataVariant("messages_get_by_id", MessageSchema),
   unitVariant("messages_delete"),
 ]);

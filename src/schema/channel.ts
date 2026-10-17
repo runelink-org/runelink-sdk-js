@@ -2,15 +2,11 @@ import { z } from "zod";
 
 export const ServerChannelKindSchema = z.enum(["text", "category"]);
 
-// A channel in a server's category tree
-export const ServerChannelSchema = z.object({
+const ServerChannelBaseSchema = z.object({
   id: z.uuid(),
   server_id: z.uuid(),
-  kind: ServerChannelKindSchema,
   title: z.string(),
   description: z.string().nullable(),
-  // Present exactly when `kind` is "text"
-  text_channel_id: z.uuid().nullable(),
   // The parent category, or null at the server root
   parent_channel_id: z.uuid().nullable(),
   // Ordering among siblings, by `position` then `id`
@@ -18,6 +14,19 @@ export const ServerChannelSchema = z.object({
   created_at: z.coerce.date(),
   updated_at: z.coerce.date(),
 });
+
+// A channel in a server's category tree. Text channels own exactly one
+// underlying text channel; categories own none.
+export const ServerChannelSchema = z.discriminatedUnion("kind", [
+  ServerChannelBaseSchema.extend({
+    kind: z.literal("text"),
+    text_channel_id: z.uuid(),
+  }),
+  ServerChannelBaseSchema.extend({
+    kind: z.literal("category"),
+    text_channel_id: z.null(),
+  }),
+]);
 
 // A new server channel, placed after its future siblings
 export const NewServerChannelSchema = z.object({
@@ -31,7 +40,8 @@ export const NewServerChannelSchema = z.object({
 // `parent_channel_id`. Indices past the end place it last.
 export const ServerChannelMoveSchema = z.object({
   parent_channel_id: z.uuid().nullable(),
-  index: z.number().int().nonnegative(),
+  // A u32 on the host
+  index: z.number().int().nonnegative().max(4294967295),
 });
 
 export type ServerChannelKind = z.infer<typeof ServerChannelKindSchema>;
