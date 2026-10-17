@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { UserSchema, UserRefSchema } from "./user";
-import { ChannelSchema } from "./channel";
+import { ServerChannelSchema } from "./channel";
 
 export const ServerSchema = z.object({
   id: z.uuid(),
@@ -18,7 +18,7 @@ export const NewServerSchema = z.object({
 
 export const ServerWithChannelsSchema = z.object({
   server: ServerSchema,
-  channels: z.array(ChannelSchema),
+  channels: z.array(ServerChannelSchema),
 });
 
 export const ServerRoleSchema = z.enum(["member", "admin"]);
