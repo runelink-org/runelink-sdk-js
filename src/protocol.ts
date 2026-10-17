@@ -2,16 +2,17 @@ import { z } from "zod";
 import {
   AuthTokenPasswordRequestSchema,
   AuthTokenRefreshRequestSchema,
-  ChannelSchema,
   FullServerMembershipSchema,
   JwksResponseSchema,
   MessageSchema,
-  NewChannelSchema,
   NewMessageSchema,
   NewServerMembershipSchema,
+  NewServerChannelSchema,
   NewServerSchema,
   NewUserSchema,
   OidcDiscoveryDocumentSchema,
+  ServerChannelMoveSchema,
+  ServerChannelSchema,
   ServerMemberSchema,
   ServerMembershipSchema,
   ServerSchema,
@@ -176,7 +177,7 @@ export const WsRequestSchema = z.discriminatedUnion("type", [
     "channels_create",
     z.object({
       server_id: z.uuid(),
-      new_channel: NewChannelSchema,
+      new_channel: NewServerChannelSchema,
       target_host: TargetHostSchema.nullable(),
     })
   ),
@@ -210,10 +211,18 @@ export const WsRequestSchema = z.discriminatedUnion("type", [
     })
   ),
   dataVariant(
-    "messages_create",
+    "channels_move",
     z.object({
       server_id: z.uuid(),
       channel_id: z.uuid(),
+      channel_move: ServerChannelMoveSchema,
+      target_host: TargetHostSchema.nullable(),
+    })
+  ),
+  dataVariant(
+    "messages_create",
+    z.object({
+      text_channel_id: z.uuid(),
       new_message: NewMessageSchema,
       target_host: TargetHostSchema.nullable(),
     })
@@ -234,16 +243,13 @@ export const WsRequestSchema = z.discriminatedUnion("type", [
   dataVariant(
     "messages_get_by_channel",
     z.object({
-      server_id: z.uuid(),
-      channel_id: z.uuid(),
+      text_channel_id: z.uuid(),
       target_host: TargetHostSchema.nullable(),
     })
   ),
   dataVariant(
     "messages_get_by_id",
     z.object({
-      server_id: z.uuid(),
-      channel_id: z.uuid(),
       message_id: z.uuid(),
       target_host: TargetHostSchema.nullable(),
     })
@@ -251,8 +257,6 @@ export const WsRequestSchema = z.discriminatedUnion("type", [
   dataVariant(
     "messages_delete",
     z.object({
-      server_id: z.uuid(),
-      channel_id: z.uuid(),
       message_id: z.uuid(),
       target_host: TargetHostSchema.nullable(),
     })
@@ -282,11 +286,12 @@ export const WsReplySchema = z.discriminatedUnion("type", [
   dataVariant("servers_get_by_id", ServerSchema),
   dataVariant("servers_get_with_channels", ServerWithChannelsSchema),
   unitVariant("servers_delete"),
-  dataVariant("channels_create", ChannelSchema),
-  dataVariant("channels_get_all", z.array(ChannelSchema)),
-  dataVariant("channels_get_by_server", z.array(ChannelSchema)),
-  dataVariant("channels_get_by_id", ChannelSchema),
+  dataVariant("channels_create", ServerChannelSchema),
+  dataVariant("channels_get_all", z.array(ServerChannelSchema)),
+  dataVariant("channels_get_by_server", z.array(ServerChannelSchema)),
+  dataVariant("channels_get_by_id", ServerChannelSchema),
   unitVariant("channels_delete"),
+  dataVariant("channels_move", z.array(ServerChannelSchema)),
   dataVariant("messages_create", MessageSchema),
   dataVariant("messages_get_all", z.array(MessageSchema)),
   dataVariant("messages_get_by_server", z.array(MessageSchema)),
@@ -318,7 +323,7 @@ export const WsUpdateSchema = z.discriminatedUnion("type", [
       server_id: z.uuid(),
     })
   ),
-  dataVariant("channel_upserted", ChannelSchema),
+  dataVariant("channel_upserted", ServerChannelSchema),
   dataVariant(
     "channel_deleted",
     z.object({
@@ -330,8 +335,7 @@ export const WsUpdateSchema = z.discriminatedUnion("type", [
   dataVariant(
     "message_deleted",
     z.object({
-      server_id: z.uuid(),
-      channel_id: z.uuid(),
+      text_channel_id: z.uuid(),
       message_id: z.uuid(),
     })
   ),

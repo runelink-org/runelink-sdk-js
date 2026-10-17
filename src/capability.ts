@@ -69,21 +69,22 @@ const capabilityVersion = {
   },
   servers: {
     create: "2026.10.16",
-    read: "2026.10.16",
+    read: "2026.10.17",
     delete: "2026.10.16",
     events: "2026.10.16",
   },
   channels: {
-    create: "2026.10.16",
-    read: "2026.10.16",
-    delete: "2026.10.16",
-    events: "2026.10.16",
+    create: "2026.10.17",
+    read: "2026.10.17",
+    delete: "2026.10.17",
+    move: "2026.10.17",
+    events: "2026.10.17",
   },
   messages: {
-    create: "2026.10.16",
-    read: "2026.10.16",
-    delete: "2026.10.16",
-    events: "2026.10.16",
+    create: "2026.10.17",
+    read: "2026.10.17",
+    delete: "2026.10.17",
+    events: "2026.10.17",
   },
 } as const;
 
@@ -123,6 +124,7 @@ const capabilityVersions = {
     create: [capabilityVersion.channels.create],
     read: [capabilityVersion.channels.read],
     delete: [capabilityVersion.channels.delete],
+    move: [capabilityVersion.channels.move],
     events: [capabilityVersion.channels.events],
   },
   messages: {
@@ -153,6 +155,7 @@ const clientWsCapabilityCatalog = freezeCapabilities({
   "channels.create": capabilityVersions.channels.create,
   "channels.read": capabilityVersions.channels.read,
   "channels.delete": capabilityVersions.channels.delete,
+  "channels.move": capabilityVersions.channels.move,
   "messages.create": capabilityVersions.messages.create,
   "messages.read": capabilityVersions.messages.read,
   "messages.delete": capabilityVersions.messages.delete,
@@ -219,6 +222,8 @@ export function requestCapability(request: WsRequest): ClientWsCapabilityId {
       return "channels.read";
     case "channels_delete":
       return "channels.delete";
+    case "channels_move":
+      return "channels.move";
     case "messages_create":
       return "messages.create";
     case "messages_get_all":
