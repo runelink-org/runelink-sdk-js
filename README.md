@@ -91,7 +91,7 @@ The SDK exports both schemas and inferred TypeScript types from `src/schema` and
 
 Examples include:
 
-- `UserSchema`, `ServerSchema`, `ChannelSchema`, `MessageSchema`
+- `UserSchema`, `ServerSchema`, `ServerChannelSchema`, `MessageSchema`
 - `WsRequestSchema`, `WsReplySchema`, `WsUpdateSchema`
 - `WsEnvelopeSchema`
 
