@@ -228,7 +228,7 @@ export function requestCapability(request: WsRequest): ClientWsCapabilityId {
       return "messages.create";
     case "messages_get_all":
     case "messages_get_by_server":
-    case "messages_get_by_channel":
+    case "messages_get_by_text_channel":
     case "messages_get_by_id":
       return "messages.read";
     case "messages_delete":
