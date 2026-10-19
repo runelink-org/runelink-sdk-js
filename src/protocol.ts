@@ -297,7 +297,7 @@ export const WsReplySchema = z.discriminatedUnion("type", [
   dataVariant("messages_get_by_server", z.array(MessageSchema)),
   dataVariant("messages_get_by_text_channel", z.array(MessageSchema)),
   dataVariant("messages_get_by_id", MessageSchema),
-  unitVariant("messages_delete"),
+  dataVariant("messages_delete", MessageSchema),
 ]);
 
 export const WsUpdateSchema = z.discriminatedUnion("type", [
@@ -332,13 +332,6 @@ export const WsUpdateSchema = z.discriminatedUnion("type", [
     })
   ),
   dataVariant("message_upserted", MessageSchema),
-  dataVariant(
-    "message_deleted",
-    z.object({
-      text_channel_id: z.uuid(),
-      message_id: z.uuid(),
-    })
-  ),
 ]);
 
 export const WsRequestEnvelopeSchema = z.object({

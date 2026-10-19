@@ -81,10 +81,10 @@ const capabilityVersion = {
     events: "2026.10.17",
   },
   messages: {
-    create: "2026.10.17",
-    read: "2026.10.17",
-    delete: "2026.10.17",
-    events: "2026.10.17",
+    create: "2026.10.19",
+    read: "2026.10.19",
+    delete: "2026.10.19",
+    events: "2026.10.19",
   },
 } as const;
 
@@ -251,7 +251,6 @@ export function updateCapability(update: WsUpdate): ClientWsCapabilityId {
     case "channel_deleted":
       return "channels.events";
     case "message_upserted":
-    case "message_deleted":
       return "messages.events";
   }
 }
