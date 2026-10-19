@@ -17,7 +17,8 @@
     "build": "tsup src/index.ts --format cjs,esm --dts --minify",
     "dev": "tsup src/index.ts --format cjs,esm --watch --dts",
     "format": "prettier --write \"src/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\""
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "test": "node --test tests/*.test.mjs"
   },
   "keywords": [],
   "author": "",
