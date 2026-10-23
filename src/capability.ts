@@ -75,9 +75,9 @@ const capabilityVersion = {
   },
   channels: {
     create: "2026.10.17",
-    read: "2026.10.17",
-    delete: "2026.10.17",
-    move: "2026.10.17",
+    read: "2026.10.22",
+    delete: "2026.10.22",
+    move: "2026.10.22",
     events: "2026.10.17",
   },
   messages: {
