@@ -197,7 +197,6 @@ export const WsRequestSchema = z.discriminatedUnion("type", [
   dataVariant(
     "channels_get_by_id",
     z.object({
-      server_id: z.uuid(),
       channel_id: z.uuid(),
       target_host: TargetHostSchema.nullable(),
     })
@@ -205,7 +204,6 @@ export const WsRequestSchema = z.discriminatedUnion("type", [
   dataVariant(
     "channels_delete",
     z.object({
-      server_id: z.uuid(),
       channel_id: z.uuid(),
       target_host: TargetHostSchema.nullable(),
     })
@@ -213,7 +211,6 @@ export const WsRequestSchema = z.discriminatedUnion("type", [
   dataVariant(
     "channels_move",
     z.object({
-      server_id: z.uuid(),
       channel_id: z.uuid(),
       channel_move: ServerChannelMoveSchema,
       target_host: TargetHostSchema.nullable(),

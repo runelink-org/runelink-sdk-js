@@ -24,7 +24,6 @@ export const ServerChannelSchema = z.discriminatedUnion("kind", [
   }),
   ServerChannelBaseSchema.extend({
     kind: z.literal("category"),
-    text_channel_id: z.null(),
   }),
 ]);
 
