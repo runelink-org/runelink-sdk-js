@@ -41,3 +41,13 @@ test("new messages accept omitted, null, and explicit reply targets", () => {
     assert.ok(NewMessageSchema.safeParse({ ...message, ...reply }).success);
   }
 });
+
+
+test("edit tokens retain microseconds through parsing and serialization", () => {
+  const timestamp = "2026-10-28T12:00:00.123456Z";
+  const message = MessageSchema.parse({ ...base, updated_at: timestamp, body: "hello", deleted_at: null, edited_at: timestamp });
+  assert.equal(message.update_version, timestamp);
+  assert.equal(message.updated_at.toISOString(), "2026-10-28T12:00:00.123Z");
+  assert.equal(MessageSchema.parse(message).update_version, timestamp);
+  assert.equal(MessageSchema.parse(JSON.parse(JSON.stringify(message))).update_version, timestamp);
+});

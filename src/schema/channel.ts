@@ -1,3 +1,4 @@
+import { editVersionFields, withUpdateVersion } from "./edit";
 import { z } from "zod";
 
 export const ServerChannelKindSchema = z.enum(["text", "category"]);
@@ -12,20 +13,22 @@ const ServerChannelBaseSchema = z.object({
   // Ordering among siblings, by `position` then `id`
   position: z.number().int(),
   created_at: z.coerce.date(),
-  updated_at: z.coerce.date(),
+  ...editVersionFields,
 });
 
 // A channel in a server's category tree. Text channels own exactly one
 // underlying text channel; categories own none.
-export const ServerChannelSchema = z.discriminatedUnion("kind", [
-  ServerChannelBaseSchema.extend({
-    kind: z.literal("text"),
-    text_channel_id: z.uuid(),
-  }),
-  ServerChannelBaseSchema.extend({
-    kind: z.literal("category"),
-  }),
-]);
+export const ServerChannelSchema = z
+  .discriminatedUnion("kind", [
+    ServerChannelBaseSchema.extend({
+      kind: z.literal("text"),
+      text_channel_id: z.uuid(),
+    }),
+    ServerChannelBaseSchema.extend({
+      kind: z.literal("category"),
+    }),
+  ])
+  .transform(withUpdateVersion);
 
 // A new server channel, placed after its future siblings
 export const NewServerChannelSchema = z.object({
@@ -47,3 +50,6 @@ export type ServerChannelKind = z.infer<typeof ServerChannelKindSchema>;
 export type ServerChannel = z.infer<typeof ServerChannelSchema>;
 export type NewServerChannel = z.infer<typeof NewServerChannelSchema>;
 export type ServerChannelMove = z.infer<typeof ServerChannelMoveSchema>;
+
+export { DetailsUpdateSchema as ServerChannelUpdateSchema } from "./edit";
+export type { DetailsUpdate as ServerChannelUpdate } from "./edit";

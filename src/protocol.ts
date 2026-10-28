@@ -1,3 +1,6 @@
+import { MessageUpdateSchema } from "./schema/message";
+import { ServerUpdateSchema } from "./schema/server";
+import { ServerChannelUpdateSchema } from "./schema/channel";
 import { z } from "zod";
 import {
   AuthTokenPasswordRequestSchema,
@@ -140,6 +143,14 @@ export const WsRequestSchema = z.discriminatedUnion("type", [
     })
   ),
   dataVariant(
+    "servers_update",
+    z.object({
+      server_id: z.uuid(),
+      server_update: ServerUpdateSchema,
+      target_host: z.string().nullable().optional(),
+    })
+  ),
+  dataVariant(
     "servers_create",
     z.object({
       new_server: NewServerSchema,
@@ -171,6 +182,14 @@ export const WsRequestSchema = z.discriminatedUnion("type", [
     z.object({
       server_id: z.uuid(),
       target_host: TargetHostSchema.nullable(),
+    })
+  ),
+  dataVariant(
+    "channels_update",
+    z.object({
+      channel_id: z.uuid(),
+      channel_update: ServerChannelUpdateSchema,
+      target_host: z.string().nullable().optional(),
     })
   ),
   dataVariant(
@@ -214,6 +233,14 @@ export const WsRequestSchema = z.discriminatedUnion("type", [
       channel_id: z.uuid(),
       channel_move: ServerChannelMoveSchema,
       target_host: TargetHostSchema.nullable(),
+    })
+  ),
+  dataVariant(
+    "messages_update",
+    z.object({
+      message_id: z.uuid(),
+      message_update: MessageUpdateSchema,
+      target_host: z.string().nullable().optional(),
     })
   ),
   dataVariant(
@@ -278,17 +305,20 @@ export const WsReplySchema = z.discriminatedUnion("type", [
   dataVariant("memberships_get_by_user_and_server", ServerMemberSchema),
   dataVariant("memberships_upsert", FullServerMembershipSchema),
   unitVariant("memberships_delete"),
+  dataVariant("servers_update", ServerSchema),
   dataVariant("servers_create", ServerSchema),
   dataVariant("servers_get_all", z.array(ServerSchema)),
   dataVariant("servers_get_by_id", ServerSchema),
   dataVariant("servers_get_with_channels", ServerWithChannelsSchema),
   unitVariant("servers_delete"),
+  dataVariant("channels_update", ServerChannelSchema),
   dataVariant("channels_create", ServerChannelSchema),
   dataVariant("channels_get_all", z.array(ServerChannelSchema)),
   dataVariant("channels_get_by_server", z.array(ServerChannelSchema)),
   dataVariant("channels_get_by_id", ServerChannelSchema),
   unitVariant("channels_delete"),
   dataVariant("channels_move", z.array(ServerChannelSchema)),
+  dataVariant("messages_update", MessageSchema),
   dataVariant("messages_create", MessageSchema),
   dataVariant("messages_get_all", z.array(MessageSchema)),
   dataVariant("messages_get_by_server", z.array(MessageSchema)),

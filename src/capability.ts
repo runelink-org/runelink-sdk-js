@@ -68,12 +68,14 @@ const capabilityVersion = {
     events: "2026.10.16",
   },
   servers: {
+    update: "2026.10.28",
     create: "2026.10.16",
     read: "2026.10.22",
     delete: "2026.10.16",
     events: "2026.10.16",
   },
   channels: {
+    update: "2026.10.28",
     create: "2026.10.22",
     read: "2026.10.22",
     delete: "2026.10.22",
@@ -81,6 +83,7 @@ const capabilityVersion = {
     events: "2026.10.22",
   },
   messages: {
+    update: "2026.10.28",
     create: "2026.10.19",
     read: "2026.10.19",
     delete: "2026.10.19",
@@ -115,12 +118,14 @@ const capabilityVersions = {
     events: [capabilityVersion.memberships.events],
   },
   servers: {
+    update: [capabilityVersion.servers.update],
     create: [capabilityVersion.servers.create],
     read: [capabilityVersion.servers.read],
     delete: [capabilityVersion.servers.delete],
     events: [capabilityVersion.servers.events],
   },
   channels: {
+    update: [capabilityVersion.channels.update],
     create: [capabilityVersion.channels.create],
     read: [capabilityVersion.channels.read],
     delete: [capabilityVersion.channels.delete],
@@ -128,6 +133,7 @@ const capabilityVersions = {
     events: [capabilityVersion.channels.events],
   },
   messages: {
+    update: [capabilityVersion.messages.update],
     create: [capabilityVersion.messages.create],
     read: [capabilityVersion.messages.read],
     delete: [capabilityVersion.messages.delete],
@@ -149,13 +155,16 @@ const clientWsCapabilityCatalog = freezeCapabilities({
   "users.delete": capabilityVersions.users.delete,
   "memberships.read": capabilityVersions.memberships.read,
   "memberships.write": capabilityVersions.memberships.write,
+  "servers.update": capabilityVersions.servers.update,
   "servers.create": capabilityVersions.servers.create,
   "servers.read": capabilityVersions.servers.read,
   "servers.delete": capabilityVersions.servers.delete,
+  "channels.update": capabilityVersions.channels.update,
   "channels.create": capabilityVersions.channels.create,
   "channels.read": capabilityVersions.channels.read,
   "channels.delete": capabilityVersions.channels.delete,
   "channels.move": capabilityVersions.channels.move,
+  "messages.update": capabilityVersions.messages.update,
   "messages.create": capabilityVersions.messages.create,
   "messages.read": capabilityVersions.messages.read,
   "messages.delete": capabilityVersions.messages.delete,
@@ -206,6 +215,8 @@ export function requestCapability(request: WsRequest): ClientWsCapabilityId {
     case "memberships_upsert":
     case "memberships_delete":
       return "memberships.write";
+    case "servers_update":
+      return "servers.update";
     case "servers_create":
       return "servers.create";
     case "servers_get_all":
@@ -214,6 +225,8 @@ export function requestCapability(request: WsRequest): ClientWsCapabilityId {
       return "servers.read";
     case "servers_delete":
       return "servers.delete";
+    case "channels_update":
+      return "channels.update";
     case "channels_create":
       return "channels.create";
     case "channels_get_all":
@@ -224,6 +237,8 @@ export function requestCapability(request: WsRequest): ClientWsCapabilityId {
       return "channels.delete";
     case "channels_move":
       return "channels.move";
+    case "messages_update":
+      return "messages.update";
     case "messages_create":
       return "messages.create";
     case "messages_get_all":
