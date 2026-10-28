@@ -1,15 +1,18 @@
+import { editVersionFields, withUpdateVersion } from "./edit";
 import { z } from "zod";
 import { UserSchema, UserRefSchema } from "./user";
 import { ServerChannelSchema } from "./channel";
 
-export const ServerSchema = z.object({
-  id: z.uuid(),
-  host: z.string(),
-  title: z.string(),
-  description: z.string().nullable(),
-  created_at: z.coerce.date(),
-  updated_at: z.coerce.date(),
-});
+export const ServerSchema = z
+  .object({
+    id: z.uuid(),
+    host: z.string(),
+    title: z.string(),
+    description: z.string().nullable(),
+    created_at: z.coerce.date(),
+    ...editVersionFields,
+  })
+  .transform(withUpdateVersion);
 
 export const NewServerSchema = z.object({
   title: z.string(),
@@ -63,3 +66,6 @@ export type ServerMembership = z.infer<typeof ServerMembershipSchema>;
 export type FullServerMembership = z.infer<typeof FullServerMembershipSchema>;
 export type ServerMember = z.infer<typeof ServerMemberSchema>;
 export type NewServerMembership = z.infer<typeof NewServerMembershipSchema>;
+
+export { DetailsUpdateSchema as ServerUpdateSchema } from "./edit";
+export type { DetailsUpdate as ServerUpdate } from "./edit";
