@@ -7,7 +7,11 @@ const messageFields = {
   text_channel_id: z.uuid(),
   author: UserSchema.nullable(),
   reply_to: z.uuid().nullable(),
-  edited_at: z.coerce.date().nullable().default(null),
+  edited_at: z
+    .union([z.string(), z.date()])
+    .pipe(z.coerce.date())
+    .nullable()
+    .default(null),
   created_at: z.coerce.date(),
   ...editVersionFields,
 };
