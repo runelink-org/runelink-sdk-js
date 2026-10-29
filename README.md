@@ -100,3 +100,9 @@ Protocol timestamps, including `created_at`, `updated_at`, and nullable timestam
 ## License
 
 ISC
+
+## Development
+
+Use Node.js 22.18+, 24.11+, or 26+ and pnpm 12.15.0. Run `pnpm install`, `pnpm format`, `pnpm build`, and `pnpm test`.
+
+The build checks types with TypeScript 7 before bundling. The `typescript` dependency aliases `@typescript/typescript6` because tsup still needs the TypeScript 6 compiler API to generate declarations. The `@typescript/native` alias provides TypeScript 7's `tsc` without conflicting with the compatibility package's `tsc6` executable.

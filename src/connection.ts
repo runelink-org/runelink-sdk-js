@@ -47,10 +47,7 @@ type PendingRequest = {
 type Listener<T> = (value: T) => void;
 
 export type RunelinkConnectionStatus =
-  | "disconnected"
-  | "connecting"
-  | "connected"
-  | "reconnecting";
+  "disconnected" | "connecting" | "connected" | "reconnecting";
 
 export type RunelinkConnectionOptions = {
   autoReconnect?: boolean;
