@@ -75,9 +75,9 @@ type ConnectionMode = "host" | "url";
 
 export class RunelinkRequestError extends Error {
   code: string;
-  details: unknown | null;
+  details: unknown;
 
-  constructor(code: string, message: string, details: unknown | null) {
+  constructor(code: string, message: string, details: unknown) {
     const detailSuffix = details == null ? "" : ` (${JSON.stringify(details)})`;
     super(`[${code}] ${message}${detailSuffix}`);
     this.name = "RunelinkRequestError";
@@ -625,7 +625,7 @@ export class RunelinkConnection {
     return Math.round(minDelay + Math.random() * (maxDelay - minDelay));
   }
 
-  private parseEventData(event: MessageEvent): unknown | null {
+  private parseEventData(event: MessageEvent): unknown {
     if (typeof event.data !== "string") {
       this.emitError(
         new Error(`Unsupported websocket message type: ${typeof event.data}`)
