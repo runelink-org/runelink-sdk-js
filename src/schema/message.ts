@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { UserSchema, UserRefSchema } from "./user";
+import { UserSchema, UserRefSchema } from "./user.js";
 
 const messageFields = {
   id: z.uuid(),

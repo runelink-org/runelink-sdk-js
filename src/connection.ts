@@ -11,7 +11,7 @@ import {
   WsUpdateEnvelopeSchema,
   WsHelloEnvelopeSchema,
   WsWelcomeEnvelopeSchema,
-} from "./protocol";
+} from "./protocol.js";
 import {
   CLIENT_WS_SUPPORTED_CAPABILITIES,
   NEGOTIATION_VERSION,
@@ -20,8 +20,8 @@ import {
   SupportedCapabilitiesSchema,
   requestCapability,
   updateCapability,
-} from "./capability";
-import { getWsUrl } from "./util";
+} from "./capability.js";
+import { getWsUrl } from "./util.js";
 
 const DEFAULT_RECONNECT_INITIAL_DELAY_MS = 1_000;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30_000;

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { WsRequest, WsUpdate } from "./protocol";
+import type { WsRequest, WsUpdate } from "./protocol.js";
 
 export const NEGOTIATION_VERSION = 1;
 

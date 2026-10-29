@@ -49,5 +49,5 @@ export type ServerChannel = z.infer<typeof ServerChannelSchema>;
 export type NewServerChannel = z.infer<typeof NewServerChannelSchema>;
 export type ServerChannelMove = z.infer<typeof ServerChannelMoveSchema>;
 
-export { DetailsUpdateSchema as ServerChannelUpdateSchema } from "./edit";
-export type { DetailsUpdate as ServerChannelUpdate } from "./edit";
+export { DetailsUpdateSchema as ServerChannelUpdateSchema } from "./edit.js";
+export type { DetailsUpdate as ServerChannelUpdate } from "./edit.js";

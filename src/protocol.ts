@@ -1,6 +1,6 @@
-import { MessageUpdateSchema } from "./schema/message";
-import { ServerUpdateSchema } from "./schema/server";
-import { ServerChannelUpdateSchema } from "./schema/channel";
+import { MessageUpdateSchema } from "./schema/message.js";
+import { ServerUpdateSchema } from "./schema/server.js";
+import { ServerChannelUpdateSchema } from "./schema/channel.js";
 import { z } from "zod";
 import {
   AuthTokenPasswordRequestSchema,
@@ -24,8 +24,11 @@ import {
   TokenResponseSchema,
   UserRefSchema,
   UserSchema,
-} from "./schema";
-import { CapabilityHelloSchema, CapabilityWelcomeSchema } from "./capability";
+} from "./schema/index.js";
+import {
+  CapabilityHelloSchema,
+  CapabilityWelcomeSchema,
+} from "./capability.js";
 
 export const RequestIdSchema = z.uuid();
 export const EventIdSchema = z.uuid();
