@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { UserSchema, UserRefSchema } from "./user";
-import { ServerChannelSchema } from "./channel";
+import { UserSchema, UserRefSchema } from "./user.js";
+import { ServerChannelSchema } from "./channel.js";
 
 export const ServerSchema = z.object({
   id: z.uuid(),
@@ -65,5 +65,5 @@ export type FullServerMembership = z.infer<typeof FullServerMembershipSchema>;
 export type ServerMember = z.infer<typeof ServerMemberSchema>;
 export type NewServerMembership = z.infer<typeof NewServerMembershipSchema>;
 
-export { DetailsUpdateSchema as ServerUpdateSchema } from "./edit";
-export type { DetailsUpdate as ServerUpdate } from "./edit";
+export { DetailsUpdateSchema as ServerUpdateSchema } from "./edit.js";
+export type { DetailsUpdate as ServerUpdate } from "./edit.js";

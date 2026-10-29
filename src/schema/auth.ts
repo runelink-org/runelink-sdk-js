@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { UserRefSchema } from "./user";
+import { UserRefSchema } from "./user.js";
 
 export const LocalAccountSchema = z.object({
   user_name: z.string(),
