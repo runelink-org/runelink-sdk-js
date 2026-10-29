@@ -95,6 +95,8 @@ Examples include:
 - `WsRequestSchema`, `WsReplySchema`, `WsUpdateSchema`
 - `WsEnvelopeSchema`
 
+Protocol timestamps, including `created_at`, `updated_at`, and nullable timestamps such as `edited_at`, stay RFC 3339 strings to preserve the host's full precision. Pass `updated_at` directly as `expected_updated_at` when editing a message, channel, or server. Convert timestamps to JavaScript `Date` objects only for display or date calculations, since that conversion discards sub-millisecond precision.
+
 ## License
 
 ISC

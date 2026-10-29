@@ -11,9 +11,9 @@ export const UserSchema = z.object({
   name: z.string(),
   host: z.string(),
   role: UserRoleSchema,
-  created_at: z.coerce.date(),
-  updated_at: z.coerce.date(),
-  synced_at: z.coerce.date().nullable(),
+  created_at: z.string().datetime({ offset: true }),
+  updated_at: z.string().datetime({ offset: true }),
+  synced_at: z.string().datetime({ offset: true }).nullable(),
 });
 
 export const NewUserSchema = z.object({

@@ -5,8 +5,8 @@ export const LocalAccountSchema = z.object({
   user_name: z.string(),
   user_host: z.string(),
   password_hash: z.string(),
-  created_at: z.coerce.date(),
-  updated_at: z.coerce.date(),
+  created_at: z.string().datetime({ offset: true }),
+  updated_at: z.string().datetime({ offset: true }),
 });
 
 export const SignupRequestSchema = z.object({
@@ -19,8 +19,8 @@ export const RefreshTokenSchema = z.object({
   user_name: z.string(),
   user_host: z.string(),
   client_id: z.string(),
-  issued_at: z.coerce.date(),
-  expires_at: z.coerce.date(),
+  issued_at: z.string().datetime({ offset: true }),
+  expires_at: z.string().datetime({ offset: true }),
   revoked: z.boolean(),
 });
 

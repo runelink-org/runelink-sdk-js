@@ -1,18 +1,16 @@
-import { editVersionFields, withUpdateVersion } from "./edit";
 import { z } from "zod";
 import { UserSchema, UserRefSchema } from "./user";
 import { ServerChannelSchema } from "./channel";
 
-export const ServerSchema = z
-  .object({
-    id: z.uuid(),
-    host: z.string(),
-    title: z.string(),
-    description: z.string().nullable(),
-    created_at: z.coerce.date(),
-    ...editVersionFields,
-  })
-  .transform(withUpdateVersion);
+export const ServerSchema = z.object({
+  id: z.uuid(),
+  host: z.string(),
+  title: z.string(),
+  description: z.string().nullable(),
+  created_at: z.string().datetime({ offset: true }),
+  // Preserve sub-millisecond precision for edit preconditions.
+  updated_at: z.string().datetime({ offset: true }),
+});
 
 export const NewServerSchema = z.object({
   title: z.string(),
@@ -30,25 +28,25 @@ export const ServerMembershipSchema = z.object({
   server: ServerSchema,
   user_ref: UserRefSchema,
   role: ServerRoleSchema,
-  joined_at: z.coerce.date(),
-  updated_at: z.coerce.date(),
-  synced_at: z.coerce.date().nullable(),
+  joined_at: z.string().datetime({ offset: true }),
+  updated_at: z.string().datetime({ offset: true }),
+  synced_at: z.string().datetime({ offset: true }).nullable(),
 });
 
 export const FullServerMembershipSchema = z.object({
   server: ServerSchema,
   user: UserSchema,
   role: ServerRoleSchema,
-  joined_at: z.coerce.date(),
-  updated_at: z.coerce.date(),
-  synced_at: z.coerce.date().nullable(),
+  joined_at: z.string().datetime({ offset: true }),
+  updated_at: z.string().datetime({ offset: true }),
+  synced_at: z.string().datetime({ offset: true }).nullable(),
 });
 
 export const ServerMemberSchema = z.object({
   user: UserSchema,
   role: ServerRoleSchema,
-  joined_at: z.coerce.date(),
-  updated_at: z.coerce.date(),
+  joined_at: z.string().datetime({ offset: true }),
+  updated_at: z.string().datetime({ offset: true }),
 });
 
 export const NewServerMembershipSchema = z.object({
