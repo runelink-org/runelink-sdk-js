@@ -29,6 +29,7 @@ export const CapabilityHelloSchema = z.object({
 export const CapabilityWelcomeSchema = z.object({
   negotiation_version: z.literal(NEGOTIATION_VERSION),
   capabilities: NegotiatedCapabilitiesSchema,
+  rejected_capabilities: SupportedCapabilitiesSchema.optional(),
   server_version: z.string(),
 });
 
@@ -268,4 +269,71 @@ export function updateCapability(update: WsUpdate): ClientWsCapabilityId {
     case "message_upserted":
       return "messages.events";
   }
+}
+
+export type CapabilityIssue = {
+  capability: string;
+  offeredVersions: string[];
+  supportedVersions: string[] | null;
+  reason:
+    | "unknown"
+    | "missing"
+    | "outdated-host"
+    | "outdated-client"
+    | "incompatible";
+  message: string;
+};
+
+function compareVersions(a: string, b: string): number {
+  const left = a.split(".").map(Number);
+  const right = b.split(".").map(Number);
+  for (let i = 0; i < 4; i++) {
+    const difference = (left[i] ?? 0) - (right[i] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return 0;
+}
+
+export function describeCapabilityIssue(
+  capability: string,
+  offeredVersions: string[],
+  supportedVersions: string[] | null
+): CapabilityIssue {
+  let reason: CapabilityIssue["reason"] = "incompatible";
+  let explanation = "incompatible versions";
+  if (supportedVersions === null) {
+    reason = "unknown";
+    explanation = "compatibility details unavailable";
+  } else if (supportedVersions.length === 0) {
+    reason = "missing";
+    explanation = "capability missing";
+  } else if (offeredVersions.length > 0) {
+    if (
+      supportedVersions.every((host) =>
+        offeredVersions.every((client) => compareVersions(host, client) < 0)
+      )
+    ) {
+      reason = "outdated-host";
+      explanation = "host needs updating";
+    } else if (
+      offeredVersions.every((client) =>
+        supportedVersions.every((host) => compareVersions(client, host) < 0)
+      )
+    ) {
+      reason = "outdated-client";
+      explanation = "client needs updating";
+    }
+  }
+  const details =
+    supportedVersions === null
+      ? ""
+      : ` (client offers ${offeredVersions.join(", ") || "none"}; host supports ${supportedVersions.join(", ") || "none"})`;
+  return {
+    capability,
+    offeredVersions: [...offeredVersions],
+    supportedVersions:
+      supportedVersions === null ? null : [...supportedVersions],
+    reason,
+    message: `${capability}: ${explanation}${details}`,
+  };
 }
