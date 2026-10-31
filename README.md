@@ -61,6 +61,7 @@ console.log(reply);
 - `getStatus()` returns one of `disconnected`, `connecting`, `connected`, or `reconnecting`
 - `getNegotiatedCapabilities()` returns the selected capability versions
 - `getUnsupportedCapabilities()` returns offered capabilities the host did not agree to
+- `getCapabilityIssues()` returns each rejected capability with offered and host-supported versions, an actionable reason, and a message. Older hosts produce `unknown` with `supportedVersions: null`; an empty host version list means the capability is missing. Both getters return `null` before negotiation or after disconnect.
 - `subscribeStatus(listener)` lets applications observe connection lifecycle changes
 - `onUpdate(listener)` subscribes to validated `WsUpdate` push events
 - `onError(listener)` subscribes to connection, parsing, validation, and request errors

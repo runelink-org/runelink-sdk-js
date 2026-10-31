@@ -15,6 +15,8 @@ import {
 import {
   CLIENT_WS_SUPPORTED_CAPABILITIES,
   NEGOTIATION_VERSION,
+  describeCapabilityIssue,
+  type CapabilityIssue,
   type NegotiatedCapabilities,
   type SupportedCapabilities,
   SupportedCapabilitiesSchema,
@@ -191,6 +193,7 @@ export class RunelinkConnection {
   private updateListeners = new Set<Listener<WsUpdate>>();
   private errorListeners = new Set<Listener<Error>>();
   private negotiationTimer: ReturnType<typeof setTimeout> | null = null;
+  private rejectedCapabilities: SupportedCapabilities | null = null;
   private negotiatedCapabilities: NegotiatedCapabilities | null = null;
 
   /**
@@ -233,6 +236,7 @@ export class RunelinkConnection {
         this.clearReconnectTimer();
         this.clearNegotiationTimer();
         this.negotiatedCapabilities = null;
+        this.rejectedCapabilities = null;
         this.openSocket();
       }
     }).finally(() => {
@@ -248,6 +252,7 @@ export class RunelinkConnection {
     this.clearReconnectTimer();
     this.clearNegotiationTimer();
     this.negotiatedCapabilities = null;
+    this.rejectedCapabilities = null;
     this.rejectConnectPromise(
       new Error("WebSocket connection attempt cancelled")
     );
@@ -293,7 +298,7 @@ export class RunelinkConnection {
     }
     if (this.negotiatedCapabilities?.[capability] !== capabilityVersion) {
       throw new Error(
-        `${this.hostOrUrl} does not support the ${capability} capability`
+        `${this.hostOrUrl}: ${this.getCapabilityIssues()?.find((issue) => issue.capability === capability)?.message ?? `${capability}: compatibility details unavailable`}`
       );
     }
 
@@ -338,6 +343,19 @@ export class RunelinkConnection {
     if (negotiated === null) return null;
     return Object.keys(this.options.capabilities).filter(
       (id) => !Object.hasOwn(negotiated, id)
+    );
+  }
+
+  /** Detailed incompatibilities, or null until negotiation completes. */
+  getCapabilityIssues(): CapabilityIssue[] | null {
+    const unsupported = this.getUnsupportedCapabilities();
+    if (unsupported === null) return null;
+    return unsupported.map((capability) =>
+      describeCapabilityIssue(
+        capability,
+        this.options.capabilities[capability],
+        this.rejectedCapabilities?.[capability] ?? null
+      )
     );
   }
 
@@ -430,6 +448,7 @@ export class RunelinkConnection {
       this.ws = null;
       this.clearNegotiationTimer();
       this.negotiatedCapabilities = null;
+      this.rejectedCapabilities = null;
 
       if (this.manualDisconnect) {
         this.reconnectAttempt = 0;
@@ -523,7 +542,28 @@ export class RunelinkConnection {
     ) {
       return false;
     }
-    this.negotiatedCapabilities = result.data.data.capabilities;
+    const { capabilities, rejected_capabilities: rejected } = result.data.data;
+    if (rejected !== undefined) {
+      // New hosts must resolve every offer exactly once. Legacy hosts omit
+      // the entire field, so omission cannot be mistaken for missing support.
+      if (
+        !Object.keys(this.options.capabilities).every(
+          (id) =>
+            Object.hasOwn(capabilities, id) !== Object.hasOwn(rejected, id)
+        ) ||
+        !Object.entries(rejected).every(
+          ([id, versions]) =>
+            Object.hasOwn(this.options.capabilities, id) &&
+            !Object.hasOwn(capabilities, id) &&
+            !versions.some((version) =>
+              this.options.capabilities[id].includes(version)
+            )
+        )
+      )
+        return false;
+    }
+    this.rejectedCapabilities = rejected ?? null;
+    this.negotiatedCapabilities = capabilities;
     this.clearNegotiationTimer();
     this.hasConnectedOnce = true;
     this.reconnectAttempt = 0;
