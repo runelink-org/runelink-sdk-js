@@ -25,12 +25,30 @@
     "prepack": "pnpm build",
     "format": "prettier --write \"src/**/*.ts\" \"scripts/**/*.mjs\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"scripts/**/*.mjs\"",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "check:package": "node scripts/check-package.mjs"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "packageManager": "pnpm@12.15.0",
+  "keywords": [
+    "runelink",
+    "chat",
+    "federation",
+    "websocket",
+    "sdk"
+  ],
+  "author": "Connor Kress <connor@ckress.dev>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/runelink-org/runelink-sdk-js.git"
+  },
+  "homepage": "https://github.com/runelink-org/runelink-sdk-js#readme",
+  "bugs": {
+    "url": "https://github.com/runelink-org/runelink-sdk-js/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "packageManager": "pnpm@12.16.1",
   "devDependencies": {
     "esbuild": "^0.28.2",
     "prettier": "^3.9.10",

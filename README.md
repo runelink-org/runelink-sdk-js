@@ -100,10 +100,24 @@ Protocol timestamps, including `created_at`, `updated_at`, and nullable timestam
 
 ## License
 
-ISC
+MIT
 
 ## Development
 
-Use Node.js 22.18+, 24.11+, or 26+ and pnpm 12.15.0. Run `pnpm install`, `pnpm format`, `pnpm build`, and `pnpm test`.
+Use Node.js 22.18+, 24.11+, or 26+ and pnpm 12.16.1. Run `pnpm install`, `pnpm format`, `pnpm build`, and `pnpm test`.
 
 Builds use TypeScript 7 for declarations and esbuild for ESM and CommonJS bundles. Use `pnpm dev` to watch for changes, and stop it before building or packing separately. `pnpm pack` runs a fresh build.
+
+Run `pnpm check:package` to build, pack, and install the package in a clean consumer, then check the ESM import, the CommonJS require, and the TypeScript declarations for both.
+
+## Releasing
+
+Pushing a `v*` tag publishes the package to npm from GitHub Actions using npm trusted publishing, so no npm token is needed.
+
+1. Bump `version` in `package.json` on `main` with a `chore: bump version to X.Y.Z` commit. SDK versions follow semver for the JavaScript API and are independent of the core crates, since capability negotiation handles protocol compatibility. Before 1.0, bump the minor version for breaking changes.
+2. Once that commit is on `origin/main`, tag it and push the tag: `git tag vX.Y.Z <commit> && git push origin vX.Y.Z`.
+3. The release workflow checks that the tag matches the package version and is on `main`, runs the format check, package check, and tests, then publishes.
+
+A published version can never be reused, so check the version before pushing the tag.
+
+The npm trusted publisher for `@runelink/sdk` must use organization `runelink-org`, repository `runelink-sdk-js`, and workflow `release.yml`, with `npm publish` enabled under allowed actions. npm only checks this configuration when publishing, and a new configuration expires if it is not used within two days, so create or recreate it just before pushing a release tag.
