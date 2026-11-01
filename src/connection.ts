@@ -297,9 +297,12 @@ export class RunelinkConnection {
       );
     }
     if (this.negotiatedCapabilities?.[capability] !== capabilityVersion) {
-      throw new Error(
-        `${this.hostOrUrl}: ${this.getCapabilityIssues()?.find((issue) => issue.capability === capability)?.message ?? `${capability}: compatibility details unavailable`}`
+      const issue = this.getCapabilityIssues()?.find(
+        (issue) => issue.capability === capability
       );
+      const message =
+        issue?.message ?? `${capability}: compatibility details unavailable`;
+      throw new Error(`${this.hostOrUrl}: ${message}`);
     }
 
     const requestId = crypto.randomUUID();
@@ -546,21 +549,21 @@ export class RunelinkConnection {
     if (rejected !== undefined) {
       // New hosts must resolve every offer exactly once. Legacy hosts omit
       // the entire field, so omission cannot be mistaken for missing support.
+      const unagreed = Object.keys(this.options.capabilities).filter(
+        (id) => !Object.hasOwn(capabilities, id)
+      );
       if (
-        !Object.keys(this.options.capabilities).every(
+        Object.keys(rejected).length !== unagreed.length ||
+        !unagreed.every(
           (id) =>
-            Object.hasOwn(capabilities, id) !== Object.hasOwn(rejected, id)
-        ) ||
-        !Object.entries(rejected).every(
-          ([id, versions]) =>
-            Object.hasOwn(this.options.capabilities, id) &&
-            !Object.hasOwn(capabilities, id) &&
-            !versions.some((version) =>
+            Object.hasOwn(rejected, id) &&
+            !rejected[id].some((version) =>
               this.options.capabilities[id].includes(version)
             )
         )
-      )
+      ) {
         return false;
+      }
     }
     this.rejectedCapabilities = rejected ?? null;
     this.negotiatedCapabilities = capabilities;
