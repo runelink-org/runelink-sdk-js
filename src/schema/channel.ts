@@ -1,12 +1,15 @@
 import { z } from "zod";
+import { DetailsUpdateSchema } from "./edit.js";
+import { MetadataSchema } from "./metadata.js";
 
 export const ServerChannelKindSchema = z.enum(["text", "category"]);
 
 const ServerChannelBaseSchema = z.object({
+  metadata: MetadataSchema.nullable().optional(),
   id: z.uuid(),
   server_id: z.uuid(),
   title: z.string(),
-  description: z.string().nullable(),
+  description: z.string().nullable().default(null),
   // The parent category, or null at the server root
   parent_channel_id: z.uuid().nullable(),
   // Ordering among siblings, by `position` then `id`
@@ -30,9 +33,10 @@ export const ServerChannelSchema = z.discriminatedUnion("kind", [
 
 // A new server channel, placed after its future siblings
 export const NewServerChannelSchema = z.object({
+  metadata: MetadataSchema.nullable().optional(),
   kind: ServerChannelKindSchema,
   title: z.string(),
-  description: z.string().nullable(),
+  description: z.string().nullable().optional(),
   parent_channel_id: z.uuid().nullable(),
 });
 
@@ -49,5 +53,7 @@ export type ServerChannel = z.infer<typeof ServerChannelSchema>;
 export type NewServerChannel = z.infer<typeof NewServerChannelSchema>;
 export type ServerChannelMove = z.infer<typeof ServerChannelMoveSchema>;
 
-export { DetailsUpdateSchema as ServerChannelUpdateSchema } from "./edit.js";
-export type { DetailsUpdate as ServerChannelUpdate } from "./edit.js";
+export const ServerChannelUpdateSchema = DetailsUpdateSchema.extend({
+  metadata: MetadataSchema.nullable().optional(),
+});
+export type ServerChannelUpdate = z.infer<typeof ServerChannelUpdateSchema>;

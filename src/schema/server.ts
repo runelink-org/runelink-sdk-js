@@ -6,7 +6,7 @@ export const ServerSchema = z.object({
   id: z.uuid(),
   host: z.string(),
   title: z.string(),
-  description: z.string().nullable(),
+  description: z.string().nullable().default(null),
   created_at: z.string().datetime({ offset: true }),
   // Preserve sub-millisecond precision for edit preconditions.
   updated_at: z.string().datetime({ offset: true }),
@@ -14,7 +14,7 @@ export const ServerSchema = z.object({
 
 export const NewServerSchema = z.object({
   title: z.string(),
-  description: z.string().nullable(),
+  description: z.string().nullable().optional(),
 });
 
 export const ServerWithChannelsSchema = z.object({
