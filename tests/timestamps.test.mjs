@@ -174,7 +174,7 @@ test("edit requests accept the original updated_at without conversion", () => {
 });
 
 test("metadata and description operations use the new version", () => {
-  for (const capability of ["messages.update", "messages.create", "channels.update", "channels.create", "channels.read", "channels.events", "channels.move", "servers.update", "servers.create", "servers.read", "servers.events", "memberships.read", "memberships.write", "memberships.events"]) {
+  for (const capability of ["messages.update", "messages.create", "channels.update", "channels.create", "channels.read", "channels.events", "channels.move", "servers.update", "servers.read", "servers.events", "memberships.read", "memberships.write", "memberships.events"]) {
     assert.deepEqual(CLIENT_WS_SUPPORTED_CAPABILITIES[capability], ["2026.11.13"]);
   }
 });

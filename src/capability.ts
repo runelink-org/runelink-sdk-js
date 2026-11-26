@@ -70,7 +70,7 @@ const capabilityVersion = {
   },
   servers: {
     update: "2026.11.13",
-    create: "2026.11.13",
+    create: "2026.11.26",
     read: "2026.11.13",
     delete: "2026.10.16",
     events: "2026.11.13",
