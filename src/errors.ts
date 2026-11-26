@@ -1,20 +1,83 @@
 import * as Schema from "effect/Schema";
 
-/** The host replied to a request with an error. */
-export class RunelinkRequestError extends Schema.TaggedError<RunelinkRequestError>()(
-  "RunelinkRequestError",
-  {
-    code: Schema.String,
-    hostMessage: Schema.String,
-    details: Schema.Unknown,
-  }
+// The fields of an error reply from the host
+const hostErrorFields = {
+  // Written by the host for people to read
+  hostMessage: Schema.String,
+  details: Schema.Unknown,
+};
+
+/**
+ * The host did not authenticate the connection, or did not allow the request,
+ * such as an action that needs a server admin (`auth_error`).
+ */
+export class RunelinkAuthError extends Schema.TaggedError<RunelinkAuthError>()(
+  "RunelinkAuthError",
+  hostErrorFields
 ) {
   override get message(): string {
-    const suffix =
-      this.details == null ? "" : ` (${JSON.stringify(this.details)})`;
-    return `[${this.code}] ${this.hostMessage}${suffix}`;
+    return this.hostMessage;
   }
 }
+
+/** The host rejected the request as invalid (`bad_request`). */
+export class RunelinkBadRequestError extends Schema.TaggedError<RunelinkBadRequestError>()(
+  "RunelinkBadRequestError",
+  hostErrorFields
+) {
+  override get message(): string {
+    return this.hostMessage;
+  }
+}
+
+/** A resource the request names does not exist (`not_found`). */
+export class RunelinkNotFoundError extends Schema.TaggedError<RunelinkNotFoundError>()(
+  "RunelinkNotFoundError",
+  hostErrorFields
+) {
+  override get message(): string {
+    return this.hostMessage;
+  }
+}
+
+/**
+ * The request conflicts with the resource's current state, such as an edit of
+ * an outdated version or a duplicate (`conflict`).
+ */
+export class RunelinkConflictError extends Schema.TaggedError<RunelinkConflictError>()(
+  "RunelinkConflictError",
+  hostErrorFields
+) {
+  override get message(): string {
+    return this.hostMessage;
+  }
+}
+
+/**
+ * The host could not complete the request, such as when a peer host is
+ * unavailable (`internal_error`), or replied with an error `code` this SDK
+ * does not know.
+ */
+export class RunelinkInternalError extends Schema.TaggedError<RunelinkInternalError>()(
+  "RunelinkInternalError",
+  { code: Schema.String, ...hostErrorFields }
+) {
+  override get message(): string {
+    return this.hostMessage;
+  }
+}
+
+/**
+ * The host replied to a request with an error carrying its `hostMessage` and
+ * `details`. An `unsupported_capability` reply is a
+ * `RunelinkUnsupportedCapabilityError` instead.
+ */
+export type RunelinkHostError =
+  | RunelinkAuthError
+  | RunelinkBadRequestError
+  | RunelinkNotFoundError
+  | RunelinkConflictError
+  | RunelinkInternalError;
 
 /**
  * The host rejected capability negotiation, or this client rejected the host's
@@ -115,7 +178,7 @@ export type RunelinkConnectError =
 /** Why a request failed. */
 export type RunelinkRequestFailure =
   | RunelinkConnectError
-  | RunelinkRequestError
+  | RunelinkHostError
   | RunelinkUnsupportedCapabilityError
   | RunelinkInvalidRequestError
   | RunelinkProtocolError;

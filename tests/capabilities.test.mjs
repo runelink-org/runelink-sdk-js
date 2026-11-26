@@ -41,6 +41,10 @@ class FakeSocket extends EventTarget {
     const data = JSON.stringify({ type: 'reply', data: { request_id: requestId, event_id: requestId, reply } });
     this.dispatchEvent(Object.assign(new Event('message'), { data }));
   }
+  error(requestId, error) {
+    const data = JSON.stringify({ type: 'error', data: { request_id: requestId, event_id: requestId, error } });
+    this.dispatchEvent(Object.assign(new Event('message'), { data }));
+  }
   close(code = 1000, reason = '') {
     if (this.readyState === 3) return;
     this.readyState = 3;
@@ -54,6 +58,14 @@ function connection(welcome) {
 }
 function run(program) {
   return Effect.runPromise(Effect.scoped(program));
+}
+// Sends a ping and returns its fiber and request ID once it is on the wire
+function pendingPing(conn, socket) {
+  return Effect.gen(function* () {
+    const fiber = yield* Effect.forkScoped(conn.request({ type: 'ping' }), { startImmediately: true });
+    yield* Effect.yieldNow;
+    return { fiber, id: socket.requests.at(-1) };
+  });
 }
 const base = { negotiation_version: 1, server_version: 'test', capabilities: { ping: v1 } };
 test('new and legacy welcomes expose reasons, preserve names, and clear on disconnect', async () => {
@@ -86,21 +98,17 @@ test('requests match replies, ignore late replies, and fail when the socket clos
     yield* conn.errors.pipe(Stream.runForEach((issue) => Deferred.succeed(firstIssue, issue)), Effect.forkScoped({ startImmediately: true }));
     yield* conn.connect;
     const socket = FakeSocket.last;
-    const pending = () => Effect.gen(function* () {
-      const fiber = yield* Effect.forkScoped(conn.request({ type: 'ping' }), { startImmediately: true });
-      yield* Effect.yieldNow;
-      return { fiber, id: socket.requests.at(-1) };
-    });
+    const pending = pendingPing(conn, socket);
 
-    let request = yield* pending();
+    let request = yield* pending;
     socket.reply(request.id, { type: 'pong' });
     assert.equal((yield* Fiber.join(request.fiber)).type, 'pong');
 
-    request = yield* pending();
+    request = yield* pending;
     socket.reply(request.id, { type: 'users_delete' });
     assert.equal((yield* Effect.flip(Fiber.join(request.fiber)))._tag, 'RunelinkProtocolError');
 
-    request = yield* pending();
+    request = yield* pending;
     yield* Fiber.interrupt(request.fiber);
     socket.reply(request.id, { type: 'pong' });
     // Frames are handled in order, so the first issue is this one if the late
@@ -108,10 +116,31 @@ test('requests match replies, ignore late replies, and fail when the socket clos
     socket.dispatchEvent(Object.assign(new Event('message'), { data: '{' }));
     assert.equal((yield* Deferred.await(firstIssue)).reason, 'Invalid message received');
 
-    request = yield* pending();
+    request = yield* pending;
     socket.close(4000, 'bye');
     const error = yield* Effect.flip(Fiber.join(request.fiber));
     assert.equal(error.message, 'WebSocket closed (4000): bye');
+  }));
+});
+test('error replies fail with the tagged error for their code', async () => {
+  await run(Effect.gen(function* () {
+    const conn = yield* connection(base);
+    yield* conn.connect;
+    const socket = FakeSocket.last;
+    for (const [code, tag] of [
+      ['auth_error', 'RunelinkAuthError'], ['bad_request', 'RunelinkBadRequestError'],
+      ['not_found', 'RunelinkNotFoundError'], ['conflict', 'RunelinkConflictError'],
+      ['internal_error', 'RunelinkInternalError'], ['rate_limited', 'RunelinkInternalError'],
+      ['unsupported_capability', 'RunelinkUnsupportedCapabilityError'],
+    ]) {
+      const { fiber, id } = yield* pendingPing(conn, socket);
+      socket.error(id, { code, message: `Host says ${code}`, details: null });
+      const error = yield* Effect.flip(Fiber.join(fiber));
+      assert.equal(error._tag, tag);
+      if (tag === 'RunelinkInternalError') assert.equal(error.code, code);
+      if (tag === 'RunelinkUnsupportedCapabilityError') assert.equal(error.capability, 'ping');
+      else assert.equal(error.message, `Host says ${code}`);
+    }
   }));
 });
 test('a socket constructor failure fails connect instead of hanging', async () => {
