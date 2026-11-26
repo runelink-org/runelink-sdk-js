@@ -15,6 +15,8 @@ export const ServerSchema = z.object({
 export const NewServerSchema = z.object({
   title: z.string(),
   description: z.string().nullable().optional(),
+  // Also create the default channels: a "general" text channel.
+  default_channels: z.boolean().optional(),
 });
 
 export const ServerWithChannelsSchema = z.object({
