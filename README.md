@@ -74,10 +74,15 @@ The streams end when the connection's scope closes.
 
 Errors are `Schema.TaggedError` classes, so they can be handled with `Effect.catchTags`:
 
-- `RunelinkRequestError`: the host replied with an error, with its `code`, `hostMessage`, and `details`
+- The host's error replies, each with the host's `hostMessage` and `details`, together the `RunelinkHostError` union:
+  - `RunelinkAuthError`: the host did not authenticate the connection or did not allow the request, such as an action that needs a server admin
+  - `RunelinkBadRequestError`: the host rejected the request as invalid
+  - `RunelinkNotFoundError`: a resource the request names does not exist
+  - `RunelinkConflictError`: the request conflicts with the resource's current state, such as an edit of an outdated version or a duplicate
+  - `RunelinkInternalError`: the host could not complete the request, such as when a peer host is unavailable, or replied with an error `code` the SDK does not know
 - `RunelinkConnectionError`: the websocket closed or could not open, with its close `code` and `reason`
 - `RunelinkIncompatibleHostError`: capability negotiation failed
-- `RunelinkUnsupportedCapabilityError`: the request needs a capability that this client does not offer or the host did not agree to. It fails without closing the connection.
+- `RunelinkUnsupportedCapabilityError`: the request needs a capability that this client does not offer or the host did not agree to, or the host replied that it does not support it. It fails without closing the connection.
 - `RunelinkDisconnectedError`: `disconnect` cancelled the call, or the connection dropped before the request was sent
 - `RunelinkInvalidRequestError`: the request failed validation before it was sent
 - `RunelinkProtocolError`: the host sent a message the SDK cannot use, such as a reply of the wrong type
@@ -124,7 +129,7 @@ Version 0.1 used Zod schemas and a Promise-based `RunelinkConnection` class. The
 - `connect()` and `disconnect()` are the `connect` and `disconnect` effects. `send(request)` is `request(request)`, which also checks the reply type.
 - `getStatus()` and `subscribeStatus(listener)` are `status` and `statusChanges`, `onUpdate(listener)` is `updates`, and `onError(listener)` is `errors`.
 - `getCapabilityIssues()` is `capabilityIssues`. `getNegotiatedCapabilities()` and `getUnsupportedCapabilities()` were removed; use the capabilities on each issue instead.
-- Errors are now `Schema.TaggedError` classes with a `_tag`. `RunelinkRequestError.message` keeps its format, with the host's message in `hostMessage`.
+- Errors are now `Schema.TaggedError` classes with a `_tag`. `RunelinkRequestError` is replaced by a class for each host error code, such as `RunelinkNotFoundError`, whose `message` is the host's message.
 
 ## License
 
