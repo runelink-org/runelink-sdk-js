@@ -1,59 +1,63 @@
-import { z } from "zod";
-import { DetailsUpdateSchema } from "./edit.js";
+import * as Schema from "effect/Schema";
+import { detailsUpdateFields } from "./edit.js";
 import { MetadataSchema } from "./metadata.js";
+import { ExactStruct, NullDefault, Timestamp, Uuid } from "./primitives.js";
 
-export const ServerChannelKindSchema = z.enum(["text", "category"]);
+export const ServerChannelKindSchema = Schema.Literals(["text", "category"]);
 
-const ServerChannelBaseSchema = z.object({
-  metadata: MetadataSchema.nullable().optional(),
-  id: z.uuid(),
-  server_id: z.uuid(),
-  title: z.string(),
-  description: z.string().nullable().default(null),
+const serverChannelFields = {
+  metadata: Schema.optional(Schema.NullOr(MetadataSchema)),
+  id: Uuid,
+  server_id: Uuid,
+  title: Schema.String,
+  description: NullDefault(Schema.String),
   // The parent category, or null at the server root
-  parent_channel_id: z.uuid().nullable(),
+  parent_channel_id: Schema.NullOr(Uuid),
   // Ordering among siblings, by `position` then `id`
-  position: z.number().int(),
-  created_at: z.string().datetime({ offset: true }),
+  position: Schema.Int,
+  created_at: Timestamp,
   // Preserve sub-millisecond precision for edit preconditions.
-  updated_at: z.string().datetime({ offset: true }),
-});
+  updated_at: Timestamp,
+};
 
 // A channel in a server's category tree. Text channels own exactly one
 // underlying text channel; categories own none.
-export const ServerChannelSchema = z.discriminatedUnion("kind", [
-  ServerChannelBaseSchema.extend({
-    kind: z.literal("text"),
-    text_channel_id: z.uuid(),
+export const ServerChannelSchema = Schema.Union([
+  Schema.Struct({
+    ...serverChannelFields,
+    kind: Schema.Literal("text"),
+    text_channel_id: Uuid,
   }),
-  ServerChannelBaseSchema.extend({
-    kind: z.literal("category"),
+  Schema.Struct({
+    ...serverChannelFields,
+    kind: Schema.Literal("category"),
   }),
 ]);
 
 // A new server channel, placed after its future siblings
-export const NewServerChannelSchema = z.object({
-  metadata: MetadataSchema.nullable().optional(),
+export const NewServerChannelSchema = Schema.Struct({
+  metadata: Schema.optional(Schema.NullOr(MetadataSchema)),
   kind: ServerChannelKindSchema,
-  title: z.string(),
-  description: z.string().nullable().optional(),
-  parent_channel_id: z.uuid().nullable(),
+  title: Schema.String,
+  description: Schema.optional(Schema.NullOr(Schema.String)),
+  parent_channel_id: Schema.NullOr(Uuid),
 });
 
 // Moves a server channel, with its subtree, to an index among the children of
 // `parent_channel_id`. Indices past the end place it last.
-export const ServerChannelMoveSchema = z.object({
-  parent_channel_id: z.uuid().nullable(),
+export const ServerChannelMoveSchema = Schema.Struct({
+  parent_channel_id: Schema.NullOr(Uuid),
   // A u32 on the host
-  index: z.number().int().nonnegative().max(4294967295),
+  index: Schema.Number.check(Schema.isUint32()),
 });
 
-export type ServerChannelKind = z.infer<typeof ServerChannelKindSchema>;
-export type ServerChannel = z.infer<typeof ServerChannelSchema>;
-export type NewServerChannel = z.infer<typeof NewServerChannelSchema>;
-export type ServerChannelMove = z.infer<typeof ServerChannelMoveSchema>;
+export type ServerChannelKind = typeof ServerChannelKindSchema.Type;
+export type ServerChannel = typeof ServerChannelSchema.Type;
+export type NewServerChannel = typeof NewServerChannelSchema.Type;
+export type ServerChannelMove = typeof ServerChannelMoveSchema.Type;
 
-export const ServerChannelUpdateSchema = DetailsUpdateSchema.extend({
-  metadata: MetadataSchema.nullable().optional(),
+export const ServerChannelUpdateSchema = ExactStruct({
+  ...detailsUpdateFields,
+  metadata: Schema.optional(Schema.NullOr(MetadataSchema)),
 });
-export type ServerChannelUpdate = z.infer<typeof ServerChannelUpdateSchema>;
+export type ServerChannelUpdate = typeof ServerChannelUpdateSchema.Type;

@@ -1,7 +1,8 @@
+import * as Schema from "effect/Schema";
 import { MessageUpdateSchema } from "./schema/message.js";
 import { ServerUpdateSchema } from "./schema/server.js";
 import { ServerChannelUpdateSchema } from "./schema/channel.js";
-import { z } from "zod";
+import { Uuid } from "./schema/primitives.js";
 import {
   AuthTokenPasswordRequestSchema,
   AuthTokenRefreshRequestSchema,
@@ -30,48 +31,48 @@ import {
   CapabilityWelcomeSchema,
 } from "./capability.js";
 
-export const RequestIdSchema = z.uuid();
-export const EventIdSchema = z.uuid();
+export const RequestIdSchema = Uuid;
+export const EventIdSchema = Uuid;
 
-export const WsErrorSchema = z.object({
-  code: z.string(),
-  message: z.string(),
-  details: z.unknown().nullable(),
+export const WsErrorSchema = Schema.Struct({
+  code: Schema.String,
+  message: Schema.String,
+  details: Schema.Unknown,
 });
 
-function unitVariant<Type extends string>(type: Type) {
-  return z.object({
-    type: z.literal(type),
+function unitVariant<const Type extends string>(type: Type) {
+  return Schema.Struct({
+    type: Schema.Literal(type),
   });
 }
 
-function dataVariant<Type extends string, Schema extends z.ZodType>(
+function dataVariant<const Type extends string, Data extends Schema.Top>(
   type: Type,
-  data: Schema
+  data: Data
 ) {
-  return z.object({
-    type: z.literal(type),
+  return Schema.Struct({
+    type: Schema.Literal(type),
     data,
   });
 }
 
-const TargetHostSchema = z.string();
+const TargetHostSchema = Schema.NullOr(Schema.String);
 
-export const WsConnectionStateSchema = z.discriminatedUnion("type", [
+export const WsConnectionStateSchema = Schema.Union([
   unitVariant("unauthenticated"),
   dataVariant(
     "authenticated",
-    z.object({
+    Schema.Struct({
       user_ref: UserRefSchema,
     })
   ),
 ]);
 
-export const AuthTokenAccessRequestSchema = z.object({
-  access_token: z.string(),
+export const AuthTokenAccessRequestSchema = Schema.Struct({
+  access_token: Schema.String,
 });
 
-export const WsRequestSchema = z.discriminatedUnion("type", [
+export const WsRequestSchema = Schema.Union([
   unitVariant("ping"),
   unitVariant("oidc_discovery"),
   unitVariant("oidc_jwks"),
@@ -85,212 +86,212 @@ export const WsRequestSchema = z.discriminatedUnion("type", [
   dataVariant("users_create", NewUserSchema),
   dataVariant(
     "users_get_all",
-    z.object({
-      target_host: TargetHostSchema.nullable(),
+    Schema.Struct({
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "users_get_by_ref",
-    z.object({
+    Schema.Struct({
       user_ref: UserRefSchema,
-      target_host: TargetHostSchema.nullable(),
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "users_get_associated_hosts",
-    z.object({
+    Schema.Struct({
       user_ref: UserRefSchema,
-      target_host: TargetHostSchema.nullable(),
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "users_delete",
-    z.object({
+    Schema.Struct({
       user_ref: UserRefSchema,
     })
   ),
   dataVariant(
     "memberships_get_by_user",
-    z.object({
+    Schema.Struct({
       user_ref: UserRefSchema,
     })
   ),
   dataVariant(
     "memberships_get_members_by_server",
-    z.object({
-      server_id: z.uuid(),
-      target_host: TargetHostSchema.nullable(),
+    Schema.Struct({
+      server_id: Uuid,
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "memberships_get_by_user_and_server",
-    z.object({
-      server_id: z.uuid(),
+    Schema.Struct({
+      server_id: Uuid,
       user_ref: UserRefSchema,
-      target_host: TargetHostSchema.nullable(),
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "memberships_upsert",
-    z.object({
-      server_id: z.uuid(),
+    Schema.Struct({
+      server_id: Uuid,
       new_membership: NewServerMembershipSchema,
     })
   ),
   dataVariant(
     "memberships_delete",
-    z.object({
-      server_id: z.uuid(),
+    Schema.Struct({
+      server_id: Uuid,
       user_ref: UserRefSchema,
-      target_host: TargetHostSchema.nullable(),
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "servers_update",
-    z.object({
-      server_id: z.uuid(),
+    Schema.Struct({
+      server_id: Uuid,
       server_update: ServerUpdateSchema,
-      target_host: z.string().nullable().optional(),
+      target_host: Schema.optional(TargetHostSchema),
     })
   ),
   dataVariant(
     "servers_create",
-    z.object({
+    Schema.Struct({
       new_server: NewServerSchema,
-      target_host: TargetHostSchema.nullable(),
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "servers_get_all",
-    z.object({
-      target_host: TargetHostSchema.nullable(),
+    Schema.Struct({
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "servers_get_by_id",
-    z.object({
-      server_id: z.uuid(),
-      target_host: TargetHostSchema.nullable(),
+    Schema.Struct({
+      server_id: Uuid,
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "servers_get_with_channels",
-    z.object({
-      server_id: z.uuid(),
-      target_host: TargetHostSchema.nullable(),
+    Schema.Struct({
+      server_id: Uuid,
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "servers_delete",
-    z.object({
-      server_id: z.uuid(),
-      target_host: TargetHostSchema.nullable(),
+    Schema.Struct({
+      server_id: Uuid,
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "channels_update",
-    z.object({
-      channel_id: z.uuid(),
+    Schema.Struct({
+      channel_id: Uuid,
       channel_update: ServerChannelUpdateSchema,
-      target_host: z.string().nullable().optional(),
+      target_host: Schema.optional(TargetHostSchema),
     })
   ),
   dataVariant(
     "channels_create",
-    z.object({
-      server_id: z.uuid(),
+    Schema.Struct({
+      server_id: Uuid,
       new_channel: NewServerChannelSchema,
-      target_host: TargetHostSchema.nullable(),
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "channels_get_all",
-    z.object({
-      target_host: TargetHostSchema.nullable(),
+    Schema.Struct({
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "channels_get_by_server",
-    z.object({
-      server_id: z.uuid(),
-      target_host: TargetHostSchema.nullable(),
+    Schema.Struct({
+      server_id: Uuid,
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "channels_get_by_id",
-    z.object({
-      channel_id: z.uuid(),
-      target_host: TargetHostSchema.nullable(),
+    Schema.Struct({
+      channel_id: Uuid,
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "channels_delete",
-    z.object({
-      channel_id: z.uuid(),
-      target_host: TargetHostSchema.nullable(),
+    Schema.Struct({
+      channel_id: Uuid,
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "channels_move",
-    z.object({
-      channel_id: z.uuid(),
+    Schema.Struct({
+      channel_id: Uuid,
       channel_move: ServerChannelMoveSchema,
-      target_host: TargetHostSchema.nullable(),
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "messages_update",
-    z.object({
-      message_id: z.uuid(),
+    Schema.Struct({
+      message_id: Uuid,
       message_update: MessageUpdateSchema,
-      target_host: z.string().nullable().optional(),
+      target_host: Schema.optional(TargetHostSchema),
     })
   ),
   dataVariant(
     "messages_create",
-    z.object({
-      text_channel_id: z.uuid(),
+    Schema.Struct({
+      text_channel_id: Uuid,
       new_message: NewMessageSchema,
-      target_host: TargetHostSchema.nullable(),
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "messages_get_all",
-    z.object({
-      target_host: TargetHostSchema.nullable(),
+    Schema.Struct({
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "messages_get_by_server",
-    z.object({
-      server_id: z.uuid(),
-      target_host: TargetHostSchema.nullable(),
+    Schema.Struct({
+      server_id: Uuid,
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "messages_get_by_text_channel",
-    z.object({
-      text_channel_id: z.uuid(),
-      target_host: TargetHostSchema.nullable(),
+    Schema.Struct({
+      text_channel_id: Uuid,
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "messages_get_by_id",
-    z.object({
-      message_id: z.uuid(),
-      target_host: TargetHostSchema.nullable(),
+    Schema.Struct({
+      message_id: Uuid,
+      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "messages_delete",
-    z.object({
-      message_id: z.uuid(),
-      target_host: TargetHostSchema.nullable(),
+    Schema.Struct({
+      message_id: Uuid,
+      target_host: TargetHostSchema,
     })
   ),
 ]);
 
-export const WsReplySchema = z.discriminatedUnion("type", [
+export const WsReplySchema = Schema.Union([
   unitVariant("pong"),
   dataVariant("oidc_discovery", OidcDiscoveryDocumentSchema),
   dataVariant("oidc_jwks", JwksResponseSchema),
@@ -299,78 +300,81 @@ export const WsReplySchema = z.discriminatedUnion("type", [
   dataVariant("auth_token", TokenResponseSchema),
   dataVariant("auth_token_access", WsConnectionStateSchema),
   dataVariant("users_create", UserSchema),
-  dataVariant("users_get_all", z.array(UserSchema)),
+  dataVariant("users_get_all", Schema.Array(UserSchema)),
   dataVariant("users_get_by_ref", UserSchema),
-  dataVariant("users_get_associated_hosts", z.array(z.string())),
+  dataVariant("users_get_associated_hosts", Schema.Array(Schema.String)),
   unitVariant("users_delete"),
-  dataVariant("memberships_get_by_user", z.array(ServerMembershipSchema)),
-  dataVariant("memberships_get_members_by_server", z.array(ServerMemberSchema)),
+  dataVariant("memberships_get_by_user", Schema.Array(ServerMembershipSchema)),
+  dataVariant(
+    "memberships_get_members_by_server",
+    Schema.Array(ServerMemberSchema)
+  ),
   dataVariant("memberships_get_by_user_and_server", ServerMemberSchema),
   dataVariant("memberships_upsert", FullServerMembershipSchema),
   unitVariant("memberships_delete"),
   dataVariant("servers_update", ServerSchema),
   dataVariant("servers_create", ServerSchema),
-  dataVariant("servers_get_all", z.array(ServerSchema)),
+  dataVariant("servers_get_all", Schema.Array(ServerSchema)),
   dataVariant("servers_get_by_id", ServerSchema),
   dataVariant("servers_get_with_channels", ServerWithChannelsSchema),
   unitVariant("servers_delete"),
   dataVariant("channels_update", ServerChannelSchema),
   dataVariant("channels_create", ServerChannelSchema),
-  dataVariant("channels_get_all", z.array(ServerChannelSchema)),
-  dataVariant("channels_get_by_server", z.array(ServerChannelSchema)),
+  dataVariant("channels_get_all", Schema.Array(ServerChannelSchema)),
+  dataVariant("channels_get_by_server", Schema.Array(ServerChannelSchema)),
   dataVariant("channels_get_by_id", ServerChannelSchema),
   unitVariant("channels_delete"),
-  dataVariant("channels_move", z.array(ServerChannelSchema)),
+  dataVariant("channels_move", Schema.Array(ServerChannelSchema)),
   dataVariant("messages_update", MessageSchema),
   dataVariant("messages_create", MessageSchema),
-  dataVariant("messages_get_all", z.array(MessageSchema)),
-  dataVariant("messages_get_by_server", z.array(MessageSchema)),
-  dataVariant("messages_get_by_text_channel", z.array(MessageSchema)),
+  dataVariant("messages_get_all", Schema.Array(MessageSchema)),
+  dataVariant("messages_get_by_server", Schema.Array(MessageSchema)),
+  dataVariant("messages_get_by_text_channel", Schema.Array(MessageSchema)),
   dataVariant("messages_get_by_id", MessageSchema),
   dataVariant("messages_delete", MessageSchema),
 ]);
 
-export const WsUpdateSchema = z.discriminatedUnion("type", [
+export const WsUpdateSchema = Schema.Union([
   dataVariant("user_upserted", UserSchema),
   dataVariant(
     "user_deleted",
-    z.object({
+    Schema.Struct({
       user_ref: UserRefSchema,
     })
   ),
   dataVariant("membership_upserted", FullServerMembershipSchema),
   dataVariant(
     "membership_deleted",
-    z.object({
-      server_id: z.uuid(),
+    Schema.Struct({
+      server_id: Uuid,
       user_ref: UserRefSchema,
     })
   ),
   dataVariant("server_upserted", ServerSchema),
   dataVariant(
     "server_deleted",
-    z.object({
-      server_id: z.uuid(),
+    Schema.Struct({
+      server_id: Uuid,
     })
   ),
   dataVariant("channel_upserted", ServerChannelSchema),
   dataVariant(
     "channel_deleted",
-    z.object({
-      server_id: z.uuid(),
-      channel_id: z.uuid(),
+    Schema.Struct({
+      server_id: Uuid,
+      channel_id: Uuid,
     })
   ),
   dataVariant("message_upserted", MessageSchema),
 ]);
 
-export const WsRequestEnvelopeSchema = z.object({
-  type: z.literal("request"),
-  data: z.object({
+export const WsRequestEnvelopeSchema = dataVariant(
+  "request",
+  Schema.Struct({
     request_id: RequestIdSchema,
     request: WsRequestSchema,
-  }),
-});
+  })
+);
 
 export const WsHelloEnvelopeSchema = dataVariant(
   "hello",
@@ -382,33 +386,33 @@ export const WsWelcomeEnvelopeSchema = dataVariant(
   CapabilityWelcomeSchema
 );
 
-export const WsReplyEnvelopeSchema = z.object({
-  type: z.literal("reply"),
-  data: z.object({
+export const WsReplyEnvelopeSchema = dataVariant(
+  "reply",
+  Schema.Struct({
     request_id: RequestIdSchema,
     event_id: EventIdSchema,
     reply: WsReplySchema,
-  }),
-});
+  })
+);
 
-export const WsErrorEnvelopeSchema = z.object({
-  type: z.literal("error"),
-  data: z.object({
-    request_id: RequestIdSchema.nullable(),
+export const WsErrorEnvelopeSchema = dataVariant(
+  "error",
+  Schema.Struct({
+    request_id: Schema.NullOr(RequestIdSchema),
     event_id: EventIdSchema,
     error: WsErrorSchema,
-  }),
-});
+  })
+);
 
-export const WsUpdateEnvelopeSchema = z.object({
-  type: z.literal("update"),
-  data: z.object({
+export const WsUpdateEnvelopeSchema = dataVariant(
+  "update",
+  Schema.Struct({
     event_id: EventIdSchema,
     update: WsUpdateSchema,
-  }),
-});
+  })
+);
 
-export const WsEnvelopeSchema = z.discriminatedUnion("type", [
+export const WsEnvelopeSchema = Schema.Union([
   WsHelloEnvelopeSchema,
   WsWelcomeEnvelopeSchema,
   WsRequestEnvelopeSchema,
@@ -417,20 +421,68 @@ export const WsEnvelopeSchema = z.discriminatedUnion("type", [
   WsUpdateEnvelopeSchema,
 ]);
 
-export type RequestId = z.infer<typeof RequestIdSchema>;
-export type EventId = z.infer<typeof EventIdSchema>;
-export type WsError = z.infer<typeof WsErrorSchema>;
-export type WsConnectionState = z.infer<typeof WsConnectionStateSchema>;
-export type AuthTokenAccessRequest = z.infer<
-  typeof AuthTokenAccessRequestSchema
+export type RequestId = typeof RequestIdSchema.Type;
+export type EventId = typeof EventIdSchema.Type;
+export type WsError = typeof WsErrorSchema.Type;
+export type WsConnectionState = typeof WsConnectionStateSchema.Type;
+export type AuthTokenAccessRequest = typeof AuthTokenAccessRequestSchema.Type;
+export type WsRequest = typeof WsRequestSchema.Type;
+export type WsReply = typeof WsReplySchema.Type;
+export type WsUpdate = typeof WsUpdateSchema.Type;
+export type WsRequestEnvelope = typeof WsRequestEnvelopeSchema.Type;
+export type WsHelloEnvelope = typeof WsHelloEnvelopeSchema.Type;
+export type WsWelcomeEnvelope = typeof WsWelcomeEnvelopeSchema.Type;
+export type WsReplyEnvelope = typeof WsReplyEnvelopeSchema.Type;
+export type WsErrorEnvelope = typeof WsErrorEnvelopeSchema.Type;
+export type WsUpdateEnvelope = typeof WsUpdateEnvelopeSchema.Type;
+export type WsEnvelope = typeof WsEnvelopeSchema.Type;
+
+/** The reply type the host sends for each request type. */
+export const REPLY_TYPE_BY_REQUEST_TYPE = {
+  ping: "pong",
+  oidc_discovery: "oidc_discovery",
+  oidc_jwks: "oidc_jwks",
+  connection_state: "connection_state",
+  auth_signup: "auth_signup",
+  auth_token_password: "auth_token",
+  auth_token_refresh: "auth_token",
+  auth_token_access: "auth_token_access",
+  auth_userinfo: null,
+  auth_register_client: null,
+  users_create: "users_create",
+  users_get_all: "users_get_all",
+  users_get_by_ref: "users_get_by_ref",
+  users_get_associated_hosts: "users_get_associated_hosts",
+  users_delete: "users_delete",
+  memberships_get_by_user: "memberships_get_by_user",
+  memberships_get_members_by_server: "memberships_get_members_by_server",
+  memberships_get_by_user_and_server: "memberships_get_by_user_and_server",
+  memberships_upsert: "memberships_upsert",
+  memberships_delete: "memberships_delete",
+  servers_update: "servers_update",
+  servers_create: "servers_create",
+  servers_get_all: "servers_get_all",
+  servers_get_by_id: "servers_get_by_id",
+  servers_get_with_channels: "servers_get_with_channels",
+  servers_delete: "servers_delete",
+  channels_update: "channels_update",
+  channels_create: "channels_create",
+  channels_get_all: "channels_get_all",
+  channels_get_by_server: "channels_get_by_server",
+  channels_get_by_id: "channels_get_by_id",
+  channels_delete: "channels_delete",
+  channels_move: "channels_move",
+  messages_update: "messages_update",
+  messages_create: "messages_create",
+  messages_get_all: "messages_get_all",
+  messages_get_by_server: "messages_get_by_server",
+  messages_get_by_text_channel: "messages_get_by_text_channel",
+  messages_get_by_id: "messages_get_by_id",
+  messages_delete: "messages_delete",
+} as const satisfies Record<WsRequest["type"], WsReply["type"] | null>;
+
+/** The reply to a request of the given type. */
+export type ReplyFor<Type extends WsRequest["type"]> = Extract<
+  WsReply,
+  { type: (typeof REPLY_TYPE_BY_REQUEST_TYPE)[Type] }
 >;
-export type WsRequest = z.infer<typeof WsRequestSchema>;
-export type WsReply = z.infer<typeof WsReplySchema>;
-export type WsUpdate = z.infer<typeof WsUpdateSchema>;
-export type WsRequestEnvelope = z.infer<typeof WsRequestEnvelopeSchema>;
-export type WsHelloEnvelope = z.infer<typeof WsHelloEnvelopeSchema>;
-export type WsWelcomeEnvelope = z.infer<typeof WsWelcomeEnvelopeSchema>;
-export type WsReplyEnvelope = z.infer<typeof WsReplyEnvelopeSchema>;
-export type WsErrorEnvelope = z.infer<typeof WsErrorEnvelopeSchema>;
-export type WsUpdateEnvelope = z.infer<typeof WsUpdateEnvelopeSchema>;
-export type WsEnvelope = z.infer<typeof WsEnvelopeSchema>;

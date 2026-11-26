@@ -1,8 +1,8 @@
-import { z } from "zod";
+import * as Schema from "effect/Schema";
+import { Timestamp } from "./primitives.js";
 
-export const DetailsUpdateSchema = z.strictObject({
-  expected_updated_at: z.string().datetime({ offset: true }),
-  title: z.string().optional(),
-  description: z.string().nullable().optional(),
-});
-export type DetailsUpdate = z.infer<typeof DetailsUpdateSchema>;
+export const detailsUpdateFields = {
+  expected_updated_at: Timestamp,
+  title: Schema.optional(Schema.String),
+  description: Schema.optional(Schema.NullOr(Schema.String)),
+};

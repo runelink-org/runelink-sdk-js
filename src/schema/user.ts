@@ -1,28 +1,29 @@
-import { z } from "zod";
+import * as Schema from "effect/Schema";
+import { Timestamp } from "./primitives.js";
 
-export const UserRoleSchema = z.enum(["user", "admin"]);
+export const UserRoleSchema = Schema.Literals(["user", "admin"]);
 
-export const UserRefSchema = z.object({
-  name: z.string(),
-  host: z.string(),
+export const UserRefSchema = Schema.Struct({
+  name: Schema.String,
+  host: Schema.String,
 });
 
-export const UserSchema = z.object({
-  name: z.string(),
-  host: z.string(),
+export const UserSchema = Schema.Struct({
+  name: Schema.String,
+  host: Schema.String,
   role: UserRoleSchema,
-  created_at: z.string().datetime({ offset: true }),
-  updated_at: z.string().datetime({ offset: true }),
-  synced_at: z.string().datetime({ offset: true }).nullable(),
+  created_at: Timestamp,
+  updated_at: Timestamp,
+  synced_at: Schema.NullOr(Timestamp),
 });
 
-export const NewUserSchema = z.object({
-  name: z.string(),
-  host: z.string(),
+export const NewUserSchema = Schema.Struct({
+  name: Schema.String,
+  host: Schema.String,
   role: UserRoleSchema,
 });
 
-export type UserRole = z.infer<typeof UserRoleSchema>;
-export type UserRef = z.infer<typeof UserRefSchema>;
-export type User = z.infer<typeof UserSchema>;
-export type NewUser = z.infer<typeof NewUserSchema>;
+export type UserRole = typeof UserRoleSchema.Type;
+export type UserRef = typeof UserRefSchema.Type;
+export type User = typeof UserSchema.Type;
+export type NewUser = typeof NewUserSchema.Type;

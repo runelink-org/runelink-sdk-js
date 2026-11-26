@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import * as Exit from "effect/Exit";
+import * as Schema from "effect/Schema";
 import {
   CLIENT_WS_SUPPORTED_CAPABILITIES,
   FullServerMembershipSchema,
@@ -15,6 +17,13 @@ import {
   ServerUpdateSchema,
   UserSchema,
 } from "../dist/index.js";
+
+function parse(schema, value) {
+  return Schema.decodeUnknownSync(schema)(value);
+}
+function ok(schema, value) {
+  return Exit.isSuccess(Schema.decodeUnknownExit(schema)(value));
+}
 
 const timestamp = "2026-10-28T12:00:00.123456789Z";
 const user = {
@@ -123,16 +132,16 @@ for (const [name, schema, data] of [
   ],
 ]) {
   test(`${name} preserves timestamps as precise strings`, () => {
-    const parsed = schema.parse(data);
+    const parsed = parse(schema, data);
     assert.equal("update_version" in parsed, false);
     assert.deepEqual(parsed, data);
-    assert.deepEqual(schema.parse(parsed), data);
-    assert.deepEqual(schema.parse(JSON.parse(JSON.stringify(parsed))), data);
+    assert.deepEqual(parse(schema, parsed), data);
+    assert.deepEqual(parse(schema, JSON.parse(JSON.stringify(parsed))), data);
     for (const [field, value] of Object.entries(data)) {
       if (!field.endsWith("_at") || value === null) continue;
       for (const invalid of [0, new Date(timestamp), "invalid"]) {
         assert.equal(
-          schema.safeParse({ ...data, [field]: invalid }).success,
+          ok(schema, { ...data, [field]: invalid }),
           false,
           field
         );
@@ -142,18 +151,18 @@ for (const [name, schema, data] of [
 }
 
 test("optional timestamps preserve null and reject malformed values", () => {
-  assert.equal(UserSchema.parse({ ...user, synced_at: null }).synced_at, null);
+  assert.equal(parse(UserSchema, { ...user, synced_at: null }).synced_at, null);
   assert.equal(
-    ServerMembershipSchema.parse({ ...membership, synced_at: null }).synced_at,
+    parse(ServerMembershipSchema, { ...membership, synced_at: null }).synced_at,
     null
   );
   assert.equal(
-    MessageSchema.parse({ ...message, edited_at: null }).edited_at,
+    parse(MessageSchema, { ...message, edited_at: null }).edited_at,
     null
   );
   for (const edited_at of [false, 0, new Date(timestamp), "invalid"]) {
     assert.equal(
-      MessageSchema.safeParse({ ...message, edited_at }).success,
+      ok(MessageSchema, { ...message, edited_at }),
       false
     );
   }
@@ -166,7 +175,7 @@ test("edit requests accept the original updated_at without conversion", () => {
     [ServerUpdateSchema, { description: "Edited description" }],
   ]) {
     assert.equal(
-      schema.parse({ ...fields, expected_updated_at: timestamp })
+      parse(schema, { ...fields, expected_updated_at: timestamp })
         .expected_updated_at,
       timestamp
     );

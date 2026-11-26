@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import * as Schema from "effect/Schema";
 import {
   ServerSchema,
   ServerChannelSchema,
@@ -10,6 +11,10 @@ import {
   WsReplySchema,
   WsUpdateSchema,
 } from "../dist/index.js";
+
+function parse(schema, value) {
+  return Schema.decodeUnknownSync(schema)(value);
+}
 
 const timestamp = "2026-11-13T00:00:00Z";
 const server = {
@@ -30,12 +35,12 @@ const channel = {
 test("missing and null resource descriptions retain the SDK's null representation", () => {
   for (const fields of [{}, { description: null }, { description: "Details" }]) {
     for (const [schema, base] of [[ServerSchema, server], [ServerChannelSchema, channel]]) {
-      assert.equal(schema.parse({ ...base, ...fields }).description, fields.description ?? null);
+      assert.equal(parse(schema, { ...base, ...fields }).description, fields.description ?? null);
     }
     for (const [type, data] of [["server_upserted", server], ["channel_upserted", channel]]) {
-      assert.equal(WsUpdateSchema.parse({ type, data: { ...data, ...fields } }).data.description, fields.description ?? null);
+      assert.equal(parse(WsUpdateSchema, { type, data: { ...data, ...fields } }).data.description, fields.description ?? null);
     }
-    const result = WsReplySchema.parse({ type: "servers_get_with_channels", data: { server: { ...server, ...fields }, channels: [{ ...channel, ...fields }] } });
+    const result = parse(WsReplySchema, { type: "servers_get_with_channels", data: { server: { ...server, ...fields }, channels: [{ ...channel, ...fields }] } });
     assert.equal(result.data.server.description, fields.description ?? null);
     assert.equal(result.data.channels[0].description, fields.description ?? null);
   }
@@ -43,14 +48,14 @@ test("missing and null resource descriptions retain the SDK's null representatio
 
 test("creation omits unused descriptions and edits preserve explicit null", () => {
   for (const schema of [NewServerSchema, NewServerChannelSchema]) {
-    const parsed = schema.parse(channel);
+    const parsed = parse(schema, channel);
     assert.equal(Object.hasOwn(JSON.parse(JSON.stringify(parsed)), "description"), false);
-    assert.equal(schema.parse({ ...channel, description: null }).description, null);
+    assert.equal(parse(schema, { ...channel, description: null }).description, null);
   }
   for (const schema of [ServerUpdateSchema, ServerChannelUpdateSchema]) {
     for (const fields of [{}, { description: null }, { description: "Details" }]) {
       const patch = { expected_updated_at: timestamp, ...fields };
-      assert.deepEqual(JSON.parse(JSON.stringify(schema.parse(patch))), patch);
+      assert.deepEqual(JSON.parse(JSON.stringify(parse(schema, patch))), patch);
     }
   }
 });

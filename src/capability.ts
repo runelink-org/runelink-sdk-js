@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as Schema from "effect/Schema";
 import type { WsRequest, WsUpdate } from "./protocol.js";
 
 export const NEGOTIATION_VERSION = 1;
@@ -7,36 +7,36 @@ export const NEGOTIATION_VERSION = 1;
 // the same day. Each version has exactly one spelling, so versions compare by
 // string equality.
 // Dates are not checked against the calendar, and revisions fit in 16 bits.
-export const CapabilityVersionSchema = z
-  .string()
-  .regex(/^\d{4}\.(0[1-9]|1[0-2])\.(0[1-9]|[12]\d|3[01])(\.[1-9]\d{0,4})?$/)
-  .refine((version) => Number(version.split(".")[3] ?? 0) <= 65_535);
-
-export const SupportedCapabilitiesSchema = z.record(
-  z.string(),
-  z.array(CapabilityVersionSchema)
+export const CapabilityVersionSchema = Schema.String.check(
+  Schema.isPattern(
+    /^\d{4}\.(0[1-9]|1[0-2])\.(0[1-9]|[12]\d|3[01])(\.[1-9]\d{0,4})?$/
+  ),
+  Schema.makeFilter((version) => Number(version.split(".")[3] ?? 0) <= 65_535)
 );
-export const NegotiatedCapabilitiesSchema = z.record(
-  z.string(),
+
+export const SupportedCapabilitiesSchema = Schema.Record(
+  Schema.String,
+  Schema.Array(CapabilityVersionSchema)
+);
+export const NegotiatedCapabilitiesSchema = Schema.Record(
+  Schema.String,
   CapabilityVersionSchema
 );
 
-export const CapabilityHelloSchema = z.object({
-  negotiation_version: z.literal(NEGOTIATION_VERSION),
+export const CapabilityHelloSchema = Schema.Struct({
+  negotiation_version: Schema.Literal(NEGOTIATION_VERSION),
   capabilities: SupportedCapabilitiesSchema,
 });
 
-export const CapabilityWelcomeSchema = z.object({
-  negotiation_version: z.literal(NEGOTIATION_VERSION),
+export const CapabilityWelcomeSchema = Schema.Struct({
+  negotiation_version: Schema.Literal(NEGOTIATION_VERSION),
   capabilities: NegotiatedCapabilitiesSchema,
-  rejected_capabilities: SupportedCapabilitiesSchema.optional(),
-  server_version: z.string(),
+  rejected_capabilities: Schema.optional(SupportedCapabilitiesSchema),
+  server_version: Schema.String,
 });
 
-export type SupportedCapabilities = z.infer<typeof SupportedCapabilitiesSchema>;
-export type NegotiatedCapabilities = z.infer<
-  typeof NegotiatedCapabilitiesSchema
->;
+export type SupportedCapabilities = typeof SupportedCapabilitiesSchema.Type;
+export type NegotiatedCapabilities = typeof NegotiatedCapabilitiesSchema.Type;
 
 function freezeCapabilities<T extends Record<string, string[]>>(
   capabilities: T
@@ -296,8 +296,8 @@ function compareVersions(a: string, b: string): number {
 
 export function describeCapabilityIssue(
   capability: string,
-  offeredVersions: string[],
-  supportedVersions: string[] | null
+  offeredVersions: ReadonlyArray<string>,
+  supportedVersions: ReadonlyArray<string> | null
 ): CapabilityIssue {
   let reason: CapabilityIssue["reason"] = "incompatible";
   let explanation = "incompatible versions";

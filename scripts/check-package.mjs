@@ -20,13 +20,21 @@ const requiredFiles = [
   "dist/types/commonjs/package.json",
 ];
 
-const typeCheck = `import { RunelinkConnection, WsRequestSchema } from "@runelink/sdk";
+const typeCheck = `import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import { RunelinkConnection, WsRequestSchema } from "@runelink/sdk";
 import type { WsRequest } from "@runelink/sdk";
 
-const request: WsRequest = WsRequestSchema.parse({ type: "ping" });
-const connection: RunelinkConnection = new RunelinkConnection("localhost");
-void request;
-void connection;
+const request: WsRequest = Schema.decodeUnknownSync(WsRequestSchema)({
+  type: "ping",
+});
+const program = Effect.gen(function* () {
+  const connection = yield* RunelinkConnection.RunelinkConnection;
+  const reply = yield* connection.request({ type: "ping" });
+  const pong: "pong" = reply.type;
+  return pong;
+});
+const layer = RunelinkConnection.layer({ host: "localhost" });
 `;
 
 async function run(command, args, cwd) {
@@ -83,12 +91,12 @@ async function checkPackage(directory) {
   await writeFile(
     path.join(consumer, "esm.mjs"),
     'import { RunelinkConnection } from "@runelink/sdk";\n' +
-      'if (typeof RunelinkConnection !== "function") throw new Error("ESM import failed");\n'
+      'if (typeof RunelinkConnection.make !== "function") throw new Error("ESM import failed");\n'
   );
   await writeFile(
     path.join(consumer, "commonjs.cjs"),
     'const { RunelinkConnection } = require("@runelink/sdk");\n' +
-      'if (typeof RunelinkConnection !== "function") throw new Error("CommonJS require failed");\n'
+      'if (typeof RunelinkConnection.make !== "function") throw new Error("CommonJS require failed");\n'
   );
   await run(process.execPath, ["esm.mjs"], consumer);
   await run(process.execPath, ["commonjs.cjs"], consumer);
