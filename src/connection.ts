@@ -28,20 +28,26 @@ import {
   updateCapability,
 } from "./capability.js";
 import {
+  RunelinkAuthError,
+  RunelinkBadRequestError,
+  RunelinkConflictError,
   RunelinkConnectionError,
   RunelinkDisconnectedError,
   RunelinkIncompatibleHostError,
+  RunelinkInternalError,
   RunelinkInvalidRequestError,
+  RunelinkNotFoundError,
   RunelinkProtocolError,
-  RunelinkRequestError,
   RunelinkUnsupportedCapabilityError,
   type RunelinkConnectError,
   type RunelinkConnectionIssue,
+  type RunelinkHostError,
   type RunelinkRequestFailure,
 } from "./errors.js";
 import {
   REPLY_TYPE_BY_REQUEST_TYPE,
   type ReplyFor,
+  type WsError,
   type WsReply,
   type WsRequest,
   type WsUpdate,
@@ -153,10 +159,7 @@ type Session = {
   readonly rejected: SupportedCapabilities | null;
   // Requests awaiting replies. Abandoned requests stay as `null` so their late
   // replies are not reported as unknown.
-  readonly pending: Map<
-    string,
-    Deferred.Deferred<WsReply, RunelinkRequestFailure> | null
-  >;
+  readonly pending: Map<string, Deferred.Deferred<WsReply, WsError> | null>;
   readonly write: (text: string) => Effect.Effect<void, Socket.SocketError>;
   // Fails with why the session ended, once the next status is published,
   // since failing resumes the requests' handlers inline
@@ -234,6 +237,33 @@ function connectionError(error: Socket.SocketError): RunelinkConnectionError {
         reason: "",
         cause: error,
       });
+}
+
+/** The error for a host's error reply, by its code. */
+function hostError(
+  error: WsError,
+  host: string,
+  capability: string
+): RunelinkHostError | RunelinkUnsupportedCapabilityError {
+  const fields = { hostMessage: error.message, details: error.details };
+  switch (error.code) {
+    case "auth_error":
+      return new RunelinkAuthError(fields);
+    case "bad_request":
+      return new RunelinkBadRequestError(fields);
+    case "not_found":
+      return new RunelinkNotFoundError(fields);
+    case "conflict":
+      return new RunelinkConflictError(fields);
+    case "unsupported_capability":
+      return new RunelinkUnsupportedCapabilityError({
+        host,
+        capability,
+        issue: error.message,
+      });
+    default:
+      return new RunelinkInternalError({ code: error.code, ...fields });
+  }
 }
 
 /** Whether a welcome agrees to and resolves exactly the offered capabilities. */
@@ -383,13 +413,7 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
       pending,
       envelope.type === "reply"
         ? Exit.succeed(envelope.data.reply)
-        : Exit.fail(
-            new RunelinkRequestError({
-              code: envelope.data.error.code,
-              hostMessage: envelope.data.error.message,
-              details: envelope.data.error.details,
-            })
-          )
+        : Exit.fail(envelope.data.error)
     );
   });
 
@@ -690,7 +714,7 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
 
   const sendRequest = Effect.fn("RunelinkConnection.request")(function* (
     input: WsRequest
-  ) {
+  ): Effect.fn.Return<WsReply, RunelinkRequestFailure> {
     const invalid = (cause: Schema.SchemaError) =>
       new RunelinkInvalidRequestError({
         requestType: String(input?.type),
@@ -727,7 +751,10 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
       });
     }
 
-    const deferred = yield* Deferred.make<WsReply, RunelinkRequestFailure>();
+    const deferred = yield* Deferred.make<WsReply, WsError>();
+    const replied = Deferred.await(deferred).pipe(
+      Effect.mapError((error) => hostError(error, host, capability))
+    );
     const reply = yield* Effect.acquireUseRelease(
       Effect.sync(() => active.pending.set(requestId, deferred)),
       // The reply or the session's release settles the request. A failed
@@ -736,13 +763,13 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
       () =>
         Effect.raceAllFirst([
           active.write(text).pipe(Effect.ignore, Effect.andThen(Effect.never)),
-          Deferred.await(deferred),
+          replied,
           Deferred.await(active.released).pipe(
             // A reply routed before the release still counts
             Effect.catch((error) =>
               Deferred.isDoneUnsafe(deferred)
-                ? Deferred.await(deferred)
-                : Effect.fail(error)
+                ? replied
+                : Effect.fail<RunelinkRequestFailure>(error)
             )
           ),
         ]),
