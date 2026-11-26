@@ -1,150 +1,191 @@
-import type { ZodError } from "zod";
-import { z } from "zod";
-import {
-  type WsReply,
-  type WsRequest,
-  type WsUpdate,
-  WsErrorEnvelopeSchema,
-  WsReplyEnvelopeSchema,
-  WsRequestEnvelopeSchema,
-  WsRequestSchema,
-  WsUpdateEnvelopeSchema,
-  WsHelloEnvelopeSchema,
-  WsWelcomeEnvelopeSchema,
-} from "./protocol.js";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as FiberHandle from "effect/FiberHandle";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as PubSub from "effect/PubSub";
+import * as Random from "effect/Random";
+import * as Result from "effect/Result";
+import * as Scheduler from "effect/Scheduler";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
+import * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
+import * as SubscriptionRef from "effect/SubscriptionRef";
+import * as Socket from "effect/socket/Socket";
 import {
   CLIENT_WS_SUPPORTED_CAPABILITIES,
   NEGOTIATION_VERSION,
-  describeCapabilityIssue,
   type CapabilityIssue,
   type NegotiatedCapabilities,
   type SupportedCapabilities,
   SupportedCapabilitiesSchema,
+  describeCapabilityIssue,
   requestCapability,
   updateCapability,
 } from "./capability.js";
+import {
+  RunelinkConnectionError,
+  RunelinkDisconnectedError,
+  RunelinkIncompatibleHostError,
+  RunelinkInvalidRequestError,
+  RunelinkProtocolError,
+  RunelinkRequestError,
+  RunelinkUnsupportedCapabilityError,
+  type RunelinkConnectError,
+  type RunelinkConnectionIssue,
+  type RunelinkRequestFailure,
+} from "./errors.js";
+import {
+  REPLY_TYPE_BY_REQUEST_TYPE,
+  type ReplyFor,
+  type WsReply,
+  type WsRequest,
+  type WsUpdate,
+  WsErrorEnvelopeSchema,
+  WsHelloEnvelopeSchema,
+  WsReplyEnvelopeSchema,
+  WsRequestEnvelopeSchema,
+  WsUpdateEnvelopeSchema,
+  WsWelcomeEnvelopeSchema,
+} from "./protocol.js";
 import { getWsUrl } from "./util.js";
 
 const DEFAULT_RECONNECT_INITIAL_DELAY_MS = 1_000;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30_000;
 const DEFAULT_RECONNECT_BACKOFF_MULTIPLIER = 2;
 const DEFAULT_RECONNECT_JITTER_RATIO = 0.2;
-const NEGOTIATION_TIMEOUT_MS = 5_000;
-// Close code the host sends when capability negotiation fails. Browsers cannot
-// send it themselves, so local failures close normally and are recorded per
-// socket instead.
+const NEGOTIATION_TIMEOUT = "5 seconds";
+// Close code the host sends when capability negotiation fails
 const PROTOCOL_ERROR_CLOSE_CODE = 1002;
+// Close code browsers report for sockets that fail without a close frame
+const ABNORMAL_CLOSE_CODE = 1006;
 
-const IncomingEnvelopeSchema = z.discriminatedUnion("type", [
-  WsReplyEnvelopeSchema,
-  WsErrorEnvelopeSchema,
-  WsUpdateEnvelopeSchema,
-]);
+const decodeRequestEnvelope = Schema.decodeUnknownEffect(
+  WsRequestEnvelopeSchema
+);
+const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
+const encodeHello = Schema.encodeEffect(
+  Schema.fromJsonString(WsHelloEnvelopeSchema)
+);
+const decodeWelcome = Schema.decodeUnknownOption(
+  Schema.fromJsonString(WsWelcomeEnvelopeSchema)
+);
+const decodeIncoming = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(
+    Schema.Union([
+      WsReplyEnvelopeSchema,
+      WsErrorEnvelopeSchema,
+      WsUpdateEnvelopeSchema,
+    ])
+  )
+);
+const decodeSupportedCapabilities = Schema.decodeUnknownSync(
+  SupportedCapabilitiesSchema
+);
 
-type PendingRequest = {
-  resolve: (reply: WsReply) => void;
-  reject: (error: Error) => void;
-};
-
-type Listener<T> = (value: T) => void;
-
-export type RunelinkConnectionStatus =
+export type Status =
   "disconnected" | "connecting" | "connected" | "reconnecting";
 
-export type RunelinkConnectionOptions = {
-  autoReconnect?: boolean;
-  reconnectInitialDelayMs?: number;
-  reconnectMaxDelayMs?: number;
-  reconnectBackoffMultiplier?: number;
-  reconnectJitterRatio?: number;
-  maxReconnectAttempts?: number | null;
-  transportSecurity?: "secure-only" | "prefer-secure";
-  capabilities?: SupportedCapabilities;
+export type Options = (
+  | {
+      /** Connects to the host's client websocket, trying `wss` first. */
+      readonly host: string;
+      readonly url?: undefined;
+    }
+  | {
+      /** Connects to this websocket URL directly. */
+      readonly url: string;
+      readonly host?: undefined;
+    }
+) & {
+  readonly autoReconnect?: boolean;
+  readonly reconnectInitialDelayMs?: number;
+  readonly reconnectMaxDelayMs?: number;
+  readonly reconnectBackoffMultiplier?: number;
+  readonly reconnectJitterRatio?: number;
+  readonly maxReconnectAttempts?: number | null;
+  /** Whether a host connection may fall back to `ws` if `wss` never opens. */
+  readonly transportSecurity?: "secure-only" | "prefer-secure";
+  readonly capabilities?: SupportedCapabilities;
 };
 
-type NormalizedRunelinkConnectionOptions = {
-  autoReconnect: boolean;
-  reconnectInitialDelayMs: number;
-  reconnectMaxDelayMs: number;
-  reconnectBackoffMultiplier: number;
-  reconnectJitterRatio: number;
-  maxReconnectAttempts: number | null;
-  transportSecurity: "secure-only" | "prefer-secure";
-  capabilities: SupportedCapabilities;
+export class RunelinkConnection extends Context.Service<
+  RunelinkConnection,
+  {
+    /**
+     * Opens the websocket if needed and waits for capability negotiation.
+     * While reconnecting is allowed, it waits through failed attempts.
+     */
+    readonly connect: Effect.Effect<void, RunelinkConnectError>;
+    /** Closes the websocket, stops reconnecting, and fails waiting calls. */
+    readonly disconnect: Effect.Effect<void>;
+    /** Connects if needed, sends a validated request, and waits for its reply. */
+    readonly request: <Request extends WsRequest>(
+      request: Request
+    ) => Effect.Effect<ReplyFor<Request["type"]>, RunelinkRequestFailure>;
+    readonly status: Effect.Effect<Status>;
+    /** The current status, then each change. */
+    readonly statusChanges: Stream.Stream<Status>;
+    /**
+     * Updates the host pushes from the time the stream starts, across
+     * reconnects. Fork consumers with `startImmediately: true` to subscribe
+     * before the fork returns.
+     */
+    readonly updates: Stream.Stream<WsUpdate>;
+    /** Problems outside of any one request, such as closes and bad messages. */
+    readonly errors: Stream.Stream<RunelinkConnectionIssue>;
+    /**
+     * Offered capabilities the host did not agree to, or none until
+     * negotiation completes.
+     */
+    readonly capabilityIssues: Effect.Effect<
+      Option.Option<ReadonlyArray<CapabilityIssue>>
+    >;
+  }
+>()("@runelink/sdk/RunelinkConnection") {}
+
+type Session = {
+  readonly negotiated: NegotiatedCapabilities;
+  readonly rejected: SupportedCapabilities | null;
+  // Requests awaiting replies. Abandoned requests stay as `null` so their late
+  // replies are not reported as unknown.
+  readonly pending: Map<
+    string,
+    Deferred.Deferred<WsReply, RunelinkRequestFailure> | null
+  >;
+  readonly write: (text: string) => Effect.Effect<void, Socket.SocketError>;
+  // Fails with why the session ended, once the next status is published,
+  // since failing resumes the requests' handlers inline
+  readonly released: Release;
 };
 
-type ConnectionMode = "host" | "url";
+type Release = Deferred.Deferred<never, RunelinkConnectError>;
 
-export class RunelinkRequestError extends Error {
-  code: string;
-  details: unknown;
-
-  constructor(code: string, message: string, details: unknown) {
-    const detailSuffix = details == null ? "" : ` (${JSON.stringify(details)})`;
-    super(`[${code}] ${message}${detailSuffix}`);
-    this.name = "RunelinkRequestError";
-    this.code = code;
-    this.details = details;
-  }
-}
-
-/**
- * The host rejected capability negotiation, or this client rejected the host's
- * reply. Reconnecting will not help until one side is updated, so automatic
- * reconnection stops.
- */
-export class RunelinkIncompatibleHostError extends Error {
-  constructor(host: string, reason: string) {
-    const reasonSuffix = reason.length > 0 ? `: ${reason}` : "";
-    super(`${host} is incompatible with this client${reasonSuffix}`);
-    this.name = "RunelinkIncompatibleHostError";
-  }
-}
-
-function formatZodError(error: ZodError): string {
-  return error.issues
-    .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-    .join("; ");
-}
+// How a socket attempt ended
+type AttemptEnd = {
+  readonly opened: boolean;
+  readonly error: RunelinkConnectionError | RunelinkIncompatibleHostError;
+};
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-function normalizeOptions(
-  options: RunelinkConnectionOptions
-): NormalizedRunelinkConnectionOptions {
+function normalizeOptions(options: Options) {
   const reconnectInitialDelayMs = Math.max(
     0,
     options.reconnectInitialDelayMs ?? DEFAULT_RECONNECT_INITIAL_DELAY_MS
   );
-  const reconnectMaxDelayMs = Math.max(
-    reconnectInitialDelayMs,
-    options.reconnectMaxDelayMs ?? DEFAULT_RECONNECT_MAX_DELAY_MS
-  );
-  const reconnectBackoffMultiplier = Math.max(
-    1,
-    options.reconnectBackoffMultiplier ?? DEFAULT_RECONNECT_BACKOFF_MULTIPLIER
-  );
-  const reconnectJitterRatio = clamp(
-    options.reconnectJitterRatio ?? DEFAULT_RECONNECT_JITTER_RATIO,
-    0,
-    1
-  );
-  const maxReconnectAttempts =
-    options.maxReconnectAttempts == null
-      ? null
-      : Math.max(0, options.maxReconnectAttempts);
-
-  const parsedCapabilities = SupportedCapabilitiesSchema.parse(
-    options.capabilities ?? CLIENT_WS_SUPPORTED_CAPABILITIES
-  );
-  const capabilities = SupportedCapabilitiesSchema.parse(
-    Object.fromEntries(
-      Object.entries(parsedCapabilities).filter(
-        ([, versions]) => versions.length > 0
+  const capabilities = Object.fromEntries(
+    Object.entries(
+      decodeSupportedCapabilities(
+        options.capabilities ?? CLIENT_WS_SUPPORTED_CAPABILITIES
       )
-    )
+    ).filter(([, versions]) => versions.length > 0)
   );
   for (const [capability, versions] of Object.entries(capabilities)) {
     const implementedVersions = CLIENT_WS_SUPPORTED_CAPABILITIES[capability];
@@ -157,597 +198,590 @@ function normalizeOptions(
       );
     }
   }
-
   return {
     autoReconnect: options.autoReconnect ?? true,
     reconnectInitialDelayMs,
-    reconnectMaxDelayMs,
-    reconnectBackoffMultiplier,
-    reconnectJitterRatio,
-    maxReconnectAttempts,
+    reconnectMaxDelayMs: Math.max(
+      reconnectInitialDelayMs,
+      options.reconnectMaxDelayMs ?? DEFAULT_RECONNECT_MAX_DELAY_MS
+    ),
+    reconnectBackoffMultiplier: Math.max(
+      1,
+      options.reconnectBackoffMultiplier ?? DEFAULT_RECONNECT_BACKOFF_MULTIPLIER
+    ),
+    reconnectJitterRatio: clamp(
+      options.reconnectJitterRatio ?? DEFAULT_RECONNECT_JITTER_RATIO,
+      0,
+      1
+    ),
+    maxReconnectAttempts:
+      options.maxReconnectAttempts == null
+        ? null
+        : Math.max(0, options.maxReconnectAttempts),
     transportSecurity: options.transportSecurity ?? "prefer-secure",
     capabilities,
   };
 }
 
-function isSecureWebsocketUrl(url: string): boolean {
-  return url.startsWith("wss://");
+function connectionError(error: Socket.SocketError): RunelinkConnectionError {
+  return error.reason._tag === "SocketCloseError"
+    ? new RunelinkConnectionError({
+        code: error.reason.code,
+        reason: error.reason.closeReason?.trim() ?? "",
+      })
+    : new RunelinkConnectionError({
+        code: ABNORMAL_CLOSE_CODE,
+        reason: "",
+        cause: error,
+      });
 }
 
-export class RunelinkConnection {
-  private hostOrUrl: string;
-  private mode: ConnectionMode;
-  private options: NormalizedRunelinkConnectionOptions;
-  private activeUrl: string | null = null;
-  private ws: WebSocket | null = null;
-  private hasConnectedOnce = false;
-  private connectPromise: Promise<void> | null = null;
-  private connectPromiseResolve: (() => void) | null = null;
-  private connectPromiseReject: ((error: Error) => void) | null = null;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private reconnectAttempt = 0;
-  private status: RunelinkConnectionStatus = "disconnected";
-  private manualDisconnect = false;
-  private pendingRequests = new Map<string, PendingRequest>();
-  private statusListeners = new Set<Listener<RunelinkConnectionStatus>>();
-  private updateListeners = new Set<Listener<WsUpdate>>();
-  private errorListeners = new Set<Listener<Error>>();
-  private negotiationTimer: ReturnType<typeof setTimeout> | null = null;
-  private rejectedCapabilities: SupportedCapabilities | null = null;
-  private negotiatedCapabilities: NegotiatedCapabilities | null = null;
-
-  /**
-   * Creates a connection from a RuneLink host by default. Pass `mode: "url"`
-   * to use a precomputed websocket URL directly.
-   */
-  constructor(
-    hostOrUrl: string,
-    options: RunelinkConnectionOptions = {},
-    mode: "host" | "url" = "host"
+/** Whether a welcome agrees to and resolves exactly the offered capabilities. */
+function isValidWelcome(
+  offered: SupportedCapabilities,
+  agreed: NegotiatedCapabilities,
+  rejected: SupportedCapabilities | undefined
+): boolean {
+  if (
+    !Object.entries(agreed).every(
+      ([id, version]) =>
+        Object.hasOwn(offered, id) && offered[id].includes(version)
+    )
   ) {
-    this.hostOrUrl = hostOrUrl;
-    this.mode = mode;
-    this.options = normalizeOptions(options);
+    return false;
+  }
+  // New hosts must resolve every offer exactly once. Legacy hosts omit the
+  // entire field, so omission cannot be mistaken for missing support.
+  if (rejected === undefined) return true;
+  const unagreed = Object.keys(offered).filter(
+    (id) => !Object.hasOwn(agreed, id)
+  );
+  return (
+    Object.keys(rejected).length === unagreed.length &&
+    unagreed.every(
+      (id) =>
+        Object.hasOwn(rejected, id) &&
+        !rejected[id].some((version) => offered[id].includes(version))
+    )
+  );
+}
+
+/** Creates a connection that disconnects when its scope closes. */
+export const make = Effect.fn("RunelinkConnection.make")(function* (
+  options: Options
+) {
+  const config = normalizeOptions(options);
+  const host = options.host ?? options.url;
+  const webSocketConstructor = yield* Socket.WebSocketConstructor;
+  const status = yield* SubscriptionRef.make<Status>("disconnected");
+  const updates = yield* PubSub.unbounded<WsUpdate>();
+  const issues = yield* PubSub.unbounded<RunelinkConnectionIssue>();
+  // The supervisor's handle closes in the connection's own finalizer, after
+  // `disconnect`, whatever the outer scope's finalizer strategy
+  const loopScope = yield* Scope.make();
+  const loop = yield* FiberHandle.make<void>().pipe(Scope.provide(loopScope));
+  const turns = yield* Semaphore.make(1);
+  const closed = yield* Deferred.make<void>();
+
+  // The negotiated session, if any
+  let session: Session | undefined;
+  // Callers waiting for the next negotiation, if any
+  let ready: Deferred.Deferred<void, RunelinkConnectError> | undefined;
+  let looping = false;
+  // Connecting outside of a dial completes this, which skips the next reconnect
+  // delay. Connecting during a dial joins it, as the old SDK did.
+  let wake = Deferred.makeUnsafe<void>();
+  let dialing = false;
+  let activeUrl = options.url ?? getWsUrl(options.host, true);
+  // Host connections may fall back to this if the secure socket never opens
+  const insecureUrl =
+    options.host !== undefined && config.transportSecurity === "prefer-secure"
+      ? getWsUrl(options.host, false)
+      : undefined;
+  // Attempts' releases that the supervisor has not completed yet, with the
+  // error each attempt ended with, if it has
+  const unreleased = new Map<Release, RunelinkConnectError | undefined>();
+  let hasConnectedOnce = false;
+  let reconnectAttempt = 0;
+
+  function settleReady(exit: Exit.Exit<void, RunelinkConnectError>): void {
+    const waiting = ready;
+    ready = undefined;
+    if (waiting !== undefined) Deferred.doneUnsafe(waiting, exit);
   }
 
-  connect(): Promise<void> {
-    this.manualDisconnect = false;
-
-    if (
-      this.ws?.readyState === WebSocket.OPEN &&
-      this.negotiatedCapabilities !== null
-    ) {
-      this.setStatus("connected");
-      return Promise.resolve();
-    }
-
-    if (this.connectPromise) {
-      return this.connectPromise;
-    }
-
-    const shouldOpen =
-      !this.ws ||
-      this.ws.readyState === WebSocket.CLOSING ||
-      this.ws.readyState === WebSocket.CLOSED;
-    const connectPromise = new Promise<void>((resolve, reject) => {
-      this.connectPromiseResolve = resolve;
-      this.connectPromiseReject = reject;
-      if (shouldOpen) {
-        this.clearReconnectTimer();
-        this.clearNegotiationTimer();
-        this.negotiatedCapabilities = null;
-        this.rejectedCapabilities = null;
-        this.openSocket();
-      }
-    }).finally(() => {
-      this.clearConnectPromise();
-    });
-    this.connectPromise = connectPromise;
-
-    return connectPromise;
-  }
-
-  disconnect(): void {
-    this.manualDisconnect = true;
-    this.clearReconnectTimer();
-    this.clearNegotiationTimer();
-    this.negotiatedCapabilities = null;
-    this.rejectedCapabilities = null;
-    this.rejectConnectPromise(
-      new Error("WebSocket connection attempt cancelled")
-    );
-    this.rejectAllPendingRequests(
-      new Error("WebSocket disconnected before a reply was received")
-    );
-
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
-
-    this.reconnectAttempt = 0;
-    this.setStatus("disconnected");
-  }
-
-  async send(message: WsRequest): Promise<WsReply> {
-    const result = WsRequestSchema.safeParse(message);
-    if (!result.success) {
-      throw new Error(`Invalid message: ${formatZodError(result.error)}`);
-    }
-
-    await this.connect();
-
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      throw new Error("WebSocket is not connected");
-    }
-
-    const capability = requestCapability(result.data);
-    const capabilityVersion = CLIENT_WS_SUPPORTED_CAPABILITIES[capability]?.[0];
-    if (capabilityVersion === undefined) {
-      throw new Error(
-        `This client does not support the ${capability} capability`
-      );
-    }
-    if (
-      this.options.capabilities[capability]?.includes(capabilityVersion) !==
-      true
-    ) {
-      throw new Error(
-        `This client does not support the ${capability} capability`
-      );
-    }
-    if (this.negotiatedCapabilities?.[capability] !== capabilityVersion) {
-      const issue = this.getCapabilityIssues()?.find(
-        (issue) => issue.capability === capability
-      );
-      const message =
-        issue?.message ?? `${capability}: compatibility details unavailable`;
-      throw new Error(`${this.hostOrUrl}: ${message}`);
-    }
-
-    const requestId = crypto.randomUUID();
-    const envelope = WsRequestEnvelopeSchema.parse({
-      type: "request",
-      data: {
-        request_id: requestId,
-        request: result.data,
-      },
-    });
-
-    const ws = this.ws;
-
-    return new Promise((resolve, reject) => {
-      this.pendingRequests.set(requestId, { resolve, reject });
-      try {
-        ws.send(JSON.stringify(envelope));
-      } catch (error) {
-        this.pendingRequests.delete(requestId);
-        reject(error instanceof Error ? error : new Error(String(error)));
-      }
-    });
-  }
-
-  getStatus(): RunelinkConnectionStatus {
-    return this.status;
-  }
-
-  getNegotiatedCapabilities(): NegotiatedCapabilities | null {
-    return this.negotiatedCapabilities
-      ? { ...this.negotiatedCapabilities }
-      : null;
-  }
-
-  /**
-   * Capabilities this client offered that the host did not agree to, or null
-   * while not connected.
-   */
-  getUnsupportedCapabilities(): string[] | null {
-    const negotiated = this.negotiatedCapabilities;
-    if (negotiated === null) return null;
-    return Object.keys(this.options.capabilities).filter(
-      (id) => !Object.hasOwn(negotiated, id)
+  function shouldReconnect(): boolean {
+    return (
+      config.autoReconnect &&
+      (config.maxReconnectAttempts === null ||
+        reconnectAttempt < config.maxReconnectAttempts)
     );
   }
 
-  /** Detailed incompatibilities, or null until negotiation completes. */
-  getCapabilityIssues(): CapabilityIssue[] | null {
-    const unsupported = this.getUnsupportedCapabilities();
-    if (unsupported === null) return null;
-    return unsupported.map((capability) =>
-      describeCapabilityIssue(
-        capability,
-        this.options.capabilities[capability],
-        this.rejectedCapabilities?.[capability] ?? null
-      )
+  function issueFor(active: Session, capability: string): CapabilityIssue {
+    return describeCapabilityIssue(
+      capability,
+      config.capabilities[capability],
+      active.rejected?.[capability] ?? null
     );
   }
 
-  subscribeStatus(listener: Listener<RunelinkConnectionStatus>): () => void {
-    this.statusListeners.add(listener);
-    listener(this.status);
-    return () => {
-      this.statusListeners.delete(listener);
-    };
-  }
-
-  onUpdate(listener: Listener<WsUpdate>): () => void {
-    this.updateListeners.add(listener);
-    return () => {
-      this.updateListeners.delete(listener);
-    };
-  }
-
-  onError(listener: Listener<Error>): () => void {
-    this.errorListeners.add(listener);
-    return () => {
-      this.errorListeners.delete(listener);
-    };
-  }
-
-  private openSocket(): void {
-    if (this.ws?.readyState === WebSocket.CONNECTING) {
-      return;
-    }
-
-    const url = this.getNextConnectionUrl();
-    const ws = new WebSocket(url);
-    let opened = false;
-    let negotiationFailure: string | null = null;
-
-    this.ws = ws;
-    this.setStatus(
-      this.hasConnectedOnce && this.reconnectAttempt > 0
-        ? "reconnecting"
-        : "connecting"
-    );
-
-    ws.onopen = () => {
-      if (this.ws !== ws) return;
-      opened = true;
-      this.clearReconnectTimer();
-      const hello = WsHelloEnvelopeSchema.parse({
-        type: "hello",
-        data: {
-          negotiation_version: NEGOTIATION_VERSION,
-          capabilities: this.options.capabilities,
-        },
-      });
-      ws.send(JSON.stringify(hello));
-      this.negotiationTimer = setTimeout(() => {
-        if (this.ws === ws && this.negotiatedCapabilities === null) {
-          // A slow host is not evidence of incompatibility, so this follows
-          // the normal reconnect path.
-          ws.close(1000, "Capability negotiation timed out");
-        }
-      }, NEGOTIATION_TIMEOUT_MS);
-    };
-
-    ws.onmessage = (event) => {
-      if (this.ws !== ws) return;
-      if (this.negotiatedCapabilities !== null) {
-        this.handleMessage(event, this.negotiatedCapabilities);
-      } else if (!this.acceptWelcome(event)) {
-        negotiationFailure = "Invalid capability negotiation response";
-        ws.close(1000, negotiationFailure);
-      }
-    };
-
-    ws.onerror = (event) => {
-      if (this.ws !== ws) return;
-      this.emitError(new Error(`WebSocket error: ${event.type}`));
-    };
-
-    ws.onclose = (event) => {
-      if (this.ws !== ws) return;
-
-      // A 1002 only means an incompatible host during negotiation. Later, it is
-      // an ordinary protocol error that reconnecting can recover from.
-      const failure =
-        negotiationFailure ??
-        (this.negotiatedCapabilities === null &&
-        event.code === PROTOCOL_ERROR_CLOSE_CODE
-          ? event.reason.trim()
-          : null);
-      this.ws = null;
-      this.clearNegotiationTimer();
-      this.negotiatedCapabilities = null;
-      this.rejectedCapabilities = null;
-
-      if (this.manualDisconnect) {
-        this.reconnectAttempt = 0;
-        this.setStatus("disconnected");
-        return;
-      }
-
-      const closeError = new Error(this.formatCloseReason(event));
-
-      if (!opened) {
-        if (this.tryFallbackTransport(url)) {
-          return;
-        }
-        if (this.shouldReconnect()) {
-          this.emitError(closeError);
-          this.scheduleReconnect();
-          return;
-        }
-        this.reconnectAttempt = 0;
-        this.setStatus("disconnected");
-        this.rejectConnectPromise(closeError);
-        return;
-      }
-
-      this.rejectAllPendingRequests(
-        new Error("WebSocket connection closed before a reply was received")
+  // Untraced: it runs for every frame.
+  const handleFrame = Effect.fnUntraced(function* (
+    active: Session,
+    frame: string | Uint8Array
+  ) {
+    if (typeof frame !== "string") {
+      return yield* PubSub.publish(
+        issues,
+        new RunelinkProtocolError({
+          reason: "Unsupported websocket message type: binary",
+        })
       );
-
-      const error =
-        failure === null
-          ? closeError
-          : new RunelinkIncompatibleHostError(this.hostOrUrl, failure);
-      this.emitError(error);
-
-      if (failure === null && this.shouldReconnect()) {
-        this.scheduleReconnect();
-        return;
-      }
-
-      this.reconnectAttempt = 0;
-      this.setStatus("disconnected");
-      this.rejectConnectPromise(error);
-    };
-  }
-
-  private getNextConnectionUrl(): string {
-    if (this.activeUrl) {
-      return this.activeUrl;
     }
-
-    if (this.mode === "url") {
-      this.activeUrl = this.hostOrUrl;
-      return this.activeUrl;
-    }
-
-    this.activeUrl = getWsUrl(this.hostOrUrl, true);
-    return this.activeUrl;
-  }
-
-  private tryFallbackTransport(previousUrl: string): boolean {
-    if (
-      this.mode !== "host" ||
-      this.options.transportSecurity !== "prefer-secure" ||
-      !isSecureWebsocketUrl(previousUrl)
-    ) {
-      return false;
-    }
-
-    const fallbackUrl = getWsUrl(this.hostOrUrl, false);
-    if (fallbackUrl === previousUrl) {
-      return false;
-    }
-
-    this.activeUrl = fallbackUrl;
-    this.openSocket();
-    return true;
-  }
-
-  /** Completes negotiation, returning false if the welcome is invalid. */
-  private acceptWelcome(event: MessageEvent): boolean {
-    const result = WsWelcomeEnvelopeSchema.safeParse(
-      this.parseEventData(event)
-    );
-    if (
-      !result.success ||
-      !Object.entries(result.data.data.capabilities).every(
-        ([id, version]) =>
-          Object.hasOwn(this.options.capabilities, id) &&
-          this.options.capabilities[id].includes(version)
-      )
-    ) {
-      return false;
-    }
-    const { capabilities, rejected_capabilities: rejected } = result.data.data;
-    if (rejected !== undefined) {
-      // New hosts must resolve every offer exactly once. Legacy hosts omit
-      // the entire field, so omission cannot be mistaken for missing support.
-      const unagreed = Object.keys(this.options.capabilities).filter(
-        (id) => !Object.hasOwn(capabilities, id)
+    const decoded = yield* Effect.result(decodeIncoming(frame));
+    if (Result.isFailure(decoded)) {
+      return yield* PubSub.publish(
+        issues,
+        new RunelinkProtocolError({
+          reason: "Invalid message received",
+          cause: decoded.failure,
+        })
       );
-      if (
-        Object.keys(rejected).length !== unagreed.length ||
-        !unagreed.every(
-          (id) =>
-            Object.hasOwn(rejected, id) &&
-            !rejected[id].some((version) =>
-              this.options.capabilities[id].includes(version)
-            )
-        )
-      ) {
-        return false;
-      }
     }
-    this.rejectedCapabilities = rejected ?? null;
-    this.negotiatedCapabilities = capabilities;
-    this.clearNegotiationTimer();
-    this.hasConnectedOnce = true;
-    this.reconnectAttempt = 0;
-    this.setStatus("connected");
-    this.resolveConnectPromise();
-    return true;
-  }
-
-  private handleMessage(
-    event: MessageEvent,
-    negotiatedCapabilities: NegotiatedCapabilities
-  ): void {
-    const data = this.parseEventData(event);
-    if (data === null) return;
-
-    const result = IncomingEnvelopeSchema.safeParse(data);
-    if (!result.success) {
-      this.emitError(
-        new Error(`Invalid message received: ${formatZodError(result.error)}`)
-      );
-      return;
-    }
-
-    const envelope = result.data;
+    const envelope = decoded.success;
     if (envelope.type === "update") {
       const capability = updateCapability(envelope.data.update);
-      const version = CLIENT_WS_SUPPORTED_CAPABILITIES[capability][0];
-      if (negotiatedCapabilities[capability] !== version) {
-        this.emitError(
-          new Error(`Received update for unnegotiated capability ${capability}`)
+      if (
+        active.negotiated[capability] !==
+        CLIENT_WS_SUPPORTED_CAPABILITIES[capability][0]
+      ) {
+        return yield* PubSub.publish(
+          issues,
+          new RunelinkProtocolError({
+            reason: `Received update for unnegotiated capability ${capability}`,
+          })
         );
-        return;
       }
-      this.emitUpdate(envelope.data.update);
-      return;
+      return yield* PubSub.publish(updates, envelope.data.update);
     }
-
     const requestId = envelope.data.request_id;
-    const pendingRequest = requestId
-      ? this.pendingRequests.get(requestId)
-      : undefined;
-
-    if (!requestId || !pendingRequest) {
-      this.emitError(
-        new Error(
-          `Received ${envelope.type} for unknown request_id: ${String(requestId)}`
-        )
+    const pending =
+      requestId === null ? undefined : active.pending.get(requestId);
+    if (requestId === null || pending === undefined) {
+      return yield* PubSub.publish(
+        issues,
+        new RunelinkProtocolError({
+          reason: `Received ${envelope.type} for unknown request_id: ${String(requestId)}`,
+        })
       );
-      return;
+    }
+    // Removing and settling in one step, so an interruption cannot drop it
+    active.pending.delete(requestId);
+    if (pending === null) return;
+    Deferred.doneUnsafe(
+      pending,
+      envelope.type === "reply"
+        ? Exit.succeed(envelope.data.reply)
+        : Exit.fail(
+            new RunelinkRequestError({
+              code: envelope.data.error.code,
+              hostMessage: envelope.data.error.message,
+              details: envelope.data.error.details,
+            })
+          )
+    );
+  });
+
+  // One socket, from opening through negotiation until it closes
+  const runAttempt = Effect.fnUntraced(function* (
+    url: string,
+    released: Release
+  ): Effect.fn.Return<never, AttemptEnd, Scope.Scope> {
+    const socket = yield* Socket.makeWebSocket(url, {
+      // Opening is left to the transport, which has its own timeout
+      openTimeout: Duration.infinity,
+    }).pipe(
+      Effect.provideService(Socket.WebSocketConstructor, webSocketConstructor)
+    );
+    const reader = yield* socket.reader.pipe(
+      // Effect's socket can miss `open` if it yields between checking
+      // `readyState` and adding its listener
+      Effect.provideService(Scheduler.PreventSchedulerYield, true),
+      Effect.mapError((error): AttemptEnd => ({
+        opened: false,
+        error: connectionError(error),
+      }))
+    );
+    const writer = yield* socket.writer;
+    const closed = (error: Socket.SocketError): AttemptEnd => ({
+      opened: true,
+      error: connectionError(error),
+    });
+    const incompatible = (reason: string): AttemptEnd => ({
+      opened: true,
+      error: new RunelinkIncompatibleHostError({ host, reason }),
+    });
+    // A 1002 only means an incompatible host during negotiation. Later, it is
+    // an ordinary protocol error that reconnecting can recover from.
+    const negotiationClosed = (error: Socket.SocketError): AttemptEnd =>
+      error.reason._tag === "SocketCloseError" &&
+      error.reason.code === PROTOCOL_ERROR_CLOSE_CODE
+        ? incompatible(error.reason.closeReason?.trim() ?? "")
+        : closed(error);
+    // Tells the host why this client is closing and fails once the socket
+    // closes, as the old SDK did before dialing again
+    const closeWith = (reason: string) =>
+      writer
+        .write(new Socket.CloseEvent(1000, reason))
+        .pipe(
+          Effect.ignore,
+          Effect.andThen(reader.pull.pipe(Effect.forever)),
+          Effect.mapError(negotiationClosed)
+        );
+
+    const hello = yield* encodeHello({
+      type: "hello",
+      data: {
+        negotiation_version: NEGOTIATION_VERSION,
+        capabilities: config.capabilities,
+      },
+    }).pipe(Effect.orDie);
+    yield* writer.write(hello).pipe(Effect.mapError(closed));
+    const [welcome, ...frames] = yield* reader.pull.pipe(
+      Effect.mapError(negotiationClosed),
+      Effect.timeoutOrElse({
+        duration: NEGOTIATION_TIMEOUT,
+        // A slow host is not evidence of incompatibility, so this ends with
+        // however the socket closes, normally following the reconnect path
+        orElse: () => closeWith("Capability negotiation timed out"),
+      })
+    );
+    const accepted =
+      typeof welcome === "string"
+        ? Option.getOrUndefined(decodeWelcome(welcome))?.data
+        : undefined;
+    if (
+      accepted === undefined ||
+      !isValidWelcome(
+        config.capabilities,
+        accepted.capabilities,
+        accepted.rejected_capabilities
+      )
+    ) {
+      yield* Effect.ignore(
+        closeWith("Invalid capability negotiation response")
+      );
+      return yield* Effect.fail(
+        incompatible("Invalid capability negotiation response")
+      );
     }
 
-    this.pendingRequests.delete(requestId);
-
-    if (envelope.type === "reply") {
-      pendingRequest.resolve(envelope.data.reply);
-      return;
-    }
-
-    pendingRequest.reject(
-      new RunelinkRequestError(
-        envelope.data.error.code,
-        envelope.data.error.message,
-        envelope.data.error.details
+    const active: Session = {
+      negotiated: accepted.capabilities,
+      rejected: accepted.rejected_capabilities ?? null,
+      pending: new Map(),
+      write: writer.write,
+      released,
+    };
+    return yield* Effect.gen(function* () {
+      dialing = false;
+      hasConnectedOnce = true;
+      reconnectAttempt = 0;
+      // Installing the session as `connected` is published, so subscribers
+      // see both together
+      yield* SubscriptionRef.modify(status, (): [void, Status] => {
+        session = active;
+        return [undefined, "connected"];
+      });
+      settleReady(Exit.void);
+      // The frames that arrived with the welcome are the first batch
+      let batch: ReadonlyArray<string | Uint8Array> = frames;
+      while (true) {
+        for (const frame of batch) yield* handleFrame(active, frame);
+        batch = yield* reader.pull.pipe(Effect.mapError(closed));
+      }
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          if (session === active) session = undefined;
+          active.pending.clear();
+        })
       )
     );
-  }
+  });
 
-  private shouldReconnect(): boolean {
-    if (!this.options.autoReconnect || this.manualDisconnect) {
-      return false;
-    }
-    if (this.options.maxReconnectAttempts == null) {
+  const waitToReconnect = Effect.fnUntraced(function* (release: () => void) {
+    reconnectAttempt += 1;
+    yield* SubscriptionRef.set(
+      status,
+      hasConnectedOnce ? "reconnecting" : "connecting"
+    );
+    release();
+    const baseDelay = Math.min(
+      config.reconnectInitialDelayMs *
+        config.reconnectBackoffMultiplier ** (reconnectAttempt - 1),
+      config.reconnectMaxDelayMs
+    );
+    const jitter = baseDelay * config.reconnectJitterRatio;
+    const minDelay = Math.max(0, baseDelay - jitter);
+    const delay = Math.round(
+      minDelay + (yield* Random.next) * (baseDelay + jitter - minDelay)
+    );
+    yield* Effect.sleep(delay).pipe(Effect.raceFirst(Deferred.await(wake)));
+  });
+
+  // Reports `disconnected` and, in the same step, either keeps the supervisor
+  // for a caller that connected after the last attempt (returning true) or
+  // retires it, so no caller or replacement supervisor can slip in between.
+  // Waiters fail after the report, since failing resumes them inline.
+  const retire = (
+    error: RunelinkConnectError,
+    canRedial: boolean,
+    release: () => void
+  ) =>
+    SubscriptionRef.modify(status, (): [typeof ready | "redial", Status] => {
+      reconnectAttempt = 0;
+      if (canRedial && Deferred.isDoneUnsafe(wake)) {
+        return ["redial", "disconnected"];
+      }
+      looping = false;
+      wake = Deferred.makeUnsafe();
+      const waiting = ready;
+      ready = undefined;
+      return [waiting, "disconnected"];
+    }).pipe(
+      Effect.map((waiting) => {
+        release();
+        if (waiting === "redial") return true;
+        if (waiting !== undefined)
+          Deferred.doneUnsafe(waiting, Exit.fail(error));
+        return false;
+      }),
+      Effect.uninterruptible
+    );
+
+  // Decides what follows an attempt, returning whether to dial again
+  const afterAttempt = Effect.fnUntraced(function* (
+    end: AttemptEnd,
+    release: () => void
+  ) {
+    if (!end.opened && insecureUrl !== undefined && activeUrl !== insecureUrl) {
+      activeUrl = insecureUrl;
       return true;
     }
-    return this.reconnectAttempt < this.options.maxReconnectAttempts;
-  }
-
-  private scheduleReconnect(): void {
-    this.clearReconnectTimer();
-    this.reconnectAttempt += 1;
-    this.setStatus(this.hasConnectedOnce ? "reconnecting" : "connecting");
-    const delayMs = this.calculateReconnectDelay(this.reconnectAttempt);
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      this.openSocket();
-    }, delayMs);
-  }
-
-  private calculateReconnectDelay(reconnectAttempt: number): number {
-    const baseDelay = Math.min(
-      this.options.reconnectInitialDelayMs *
-        this.options.reconnectBackoffMultiplier **
-          Math.max(0, reconnectAttempt - 1),
-      this.options.reconnectMaxDelayMs
-    );
-    const jitter = baseDelay * this.options.reconnectJitterRatio;
-    const minDelay = Math.max(0, baseDelay - jitter);
-    const maxDelay = baseDelay + jitter;
-    return Math.round(minDelay + Math.random() * (maxDelay - minDelay));
-  }
-
-  private parseEventData(event: MessageEvent): unknown {
-    if (typeof event.data !== "string") {
-      this.emitError(
-        new Error(`Unsupported websocket message type: ${typeof event.data}`)
-      );
-      return null;
+    const retry =
+      end.error._tag === "RunelinkConnectionError" && shouldReconnect();
+    yield* PubSub.publish(issues, end.error);
+    if (retry) {
+      yield* waitToReconnect(release);
+      return true;
     }
-    try {
-      return JSON.parse(event.data);
-    } catch (error) {
-      this.emitError(
-        new Error(
-          `Failed to parse message: ${error instanceof Error ? error.message : String(error)}`
+    // A call that failed with this socket may have already connected again
+    if (!(yield* retire(end.error, true, release))) return false;
+    yield* SubscriptionRef.set(status, "connecting");
+    return true;
+  });
+
+  // The sole owner of reconnects, running until it gives up or is interrupted
+  const supervise = Effect.gen(function* () {
+    yield* SubscriptionRef.set(status, "connecting");
+    let again = true;
+    while (again) {
+      wake = Deferred.makeUnsafe();
+      dialing = true;
+      const released: Release = Deferred.makeUnsafe();
+      unreleased.set(released, undefined);
+      const release = (error: RunelinkConnectError) => {
+        unreleased.delete(released);
+        Deferred.doneUnsafe(released, Exit.fail(error));
+      };
+      again = yield* Effect.gen(function* () {
+        const end = yield* Effect.flip(
+          Effect.scoped(runAttempt(activeUrl, released))
+        );
+        dialing = false;
+        unreleased.set(released, end.error);
+        return yield* afterAttempt(end, () => release(end.error));
+      }).pipe(
+        // `disconnect` releases interrupted attempts after publishing its status
+        Effect.onExit((exit) =>
+          Exit.hasInterrupts(exit)
+            ? Effect.void
+            : Effect.sync(() => release(new RunelinkDisconnectedError()))
         )
       );
-      return null;
     }
-  }
+  }).pipe(
+    // A defect, such as the socket constructor rejecting the URL, also ends it
+    Effect.catchDefect((cause) => {
+      const error = new RunelinkConnectionError({
+        code: ABNORMAL_CLOSE_CODE,
+        reason: "",
+        cause,
+      });
+      return PubSub.publish(issues, error).pipe(
+        Effect.andThen(retire(error, false, () => {}))
+      );
+    })
+  );
 
-  private formatCloseReason(event: CloseEvent): string {
-    const reason = event.reason.trim();
-    if (reason.length > 0) {
-      return `WebSocket closed (${event.code}): ${reason}`;
+  // Starting the supervisor and disconnecting take turns, and only the wait
+  // for negotiation is interruptible, so neither can strand the other
+  const connect: Effect.Effect<void, RunelinkConnectError> =
+    Effect.uninterruptibleMask((restore) =>
+      Effect.suspend(() => {
+        if (Deferred.isDoneUnsafe(closed)) {
+          return Effect.fail(new RunelinkDisconnectedError());
+        }
+        if (session !== undefined) return Effect.succeed(undefined);
+        if (ready === undefined) {
+          ready = Deferred.makeUnsafe();
+          if (looping && !dialing) Deferred.doneUnsafe(wake, Exit.void);
+        }
+        const waiting = ready;
+        if (looping) return Effect.succeed(waiting);
+        looping = true;
+        return FiberHandle.run(loop, supervise).pipe(Effect.as(waiting));
+      }).pipe(
+        Semaphore.withPermit(turns),
+        Effect.flatMap((waiting) =>
+          waiting === undefined ? Effect.void : restore(Deferred.await(waiting))
+        )
+      )
+    ).pipe(Effect.withSpan("RunelinkConnection.connect"));
+
+  // Stops the supervisor first so it cannot publish afterwards, and publishes
+  // `disconnected` before failing anything
+  const disconnect = Effect.gen(function* () {
+    yield* FiberHandle.clear(loop);
+    looping = false;
+    dialing = false;
+    reconnectAttempt = 0;
+    wake = Deferred.makeUnsafe();
+    const waiting = ready;
+    ready = undefined;
+    yield* SubscriptionRef.set(status, "disconnected");
+    for (const [released, error] of unreleased) {
+      Deferred.doneUnsafe(
+        released,
+        Exit.fail(error ?? new RunelinkDisconnectedError())
+      );
     }
-    return `WebSocket closed (${event.code})`;
-  }
-
-  private setStatus(status: RunelinkConnectionStatus): void {
-    if (this.status === status) return;
-    this.status = status;
-    for (const listener of this.statusListeners) {
-      listener(status);
+    unreleased.clear();
+    if (waiting !== undefined) {
+      Deferred.doneUnsafe(waiting, Exit.fail(new RunelinkDisconnectedError()));
     }
-  }
+  }).pipe(
+    Semaphore.withPermit(turns),
+    Effect.uninterruptible,
+    Effect.withSpan("RunelinkConnection.disconnect")
+  );
+  // Closing the scope disposes of the connection and ends its streams
+  yield* Effect.addFinalizer(() =>
+    Deferred.succeed(closed, undefined).pipe(
+      Effect.andThen(disconnect),
+      Effect.andThen(Scope.close(loopScope, Exit.void)),
+      Effect.andThen(PubSub.shutdown(status.pubsub)),
+      Effect.andThen(PubSub.shutdown(updates)),
+      Effect.andThen(PubSub.shutdown(issues))
+    )
+  );
 
-  private clearNegotiationTimer(): void {
-    if (this.negotiationTimer) {
-      clearTimeout(this.negotiationTimer);
-      this.negotiationTimer = null;
+  const sendRequest = Effect.fn("RunelinkConnection.request")(function* (
+    input: WsRequest
+  ) {
+    const invalid = (cause: Schema.SchemaError) =>
+      new RunelinkInvalidRequestError({
+        requestType: String(input?.type),
+        cause,
+      });
+    const requestId = crypto.randomUUID();
+    const envelope = yield* decodeRequestEnvelope({
+      type: "request",
+      data: { request_id: requestId, request: input },
+    }).pipe(Effect.mapError(invalid));
+    const request = envelope.data.request;
+    // Serialized before connecting, so later changes to the input are not sent
+    const text = yield* encodeJson(envelope).pipe(Effect.mapError(invalid));
+    yield* connect;
+    const active = session;
+    if (active === undefined) return yield* new RunelinkDisconnectedError();
+
+    const capability = requestCapability(request);
+    const version = CLIENT_WS_SUPPORTED_CAPABILITIES[capability][0];
+    if (
+      version === undefined ||
+      !config.capabilities[capability]?.includes(version)
+    ) {
+      return yield* new RunelinkUnsupportedCapabilityError({
+        host,
+        capability,
+      });
     }
-  }
-
-  private emitUpdate(update: WsUpdate): void {
-    for (const listener of this.updateListeners) {
-      listener(update);
+    if (active.negotiated[capability] !== version) {
+      return yield* new RunelinkUnsupportedCapabilityError({
+        host,
+        capability,
+        issue: issueFor(active, capability).message,
+      });
     }
-  }
 
-  private emitError(error: Error): void {
-    for (const listener of this.errorListeners) {
-      listener(error);
+    const deferred = yield* Deferred.make<WsReply, RunelinkRequestFailure>();
+    const reply = yield* Effect.acquireUseRelease(
+      Effect.sync(() => active.pending.set(requestId, deferred)),
+      // The reply or the session's release settles the request. A failed
+      // write means the socket closed, which the release reports, and a write
+      // can also wait forever on a closed socket.
+      () =>
+        Effect.raceAllFirst([
+          active.write(text).pipe(Effect.ignore, Effect.andThen(Effect.never)),
+          Deferred.await(deferred),
+          Deferred.await(active.released).pipe(
+            // A reply routed before the release still counts
+            Effect.catch((error) =>
+              Deferred.isDoneUnsafe(deferred)
+                ? Deferred.await(deferred)
+                : Effect.fail(error)
+            )
+          ),
+        ]),
+      (_, exit) =>
+        Effect.sync(() => {
+          if (Exit.hasInterrupts(exit) && active.pending.has(requestId)) {
+            active.pending.set(requestId, null);
+          } else {
+            active.pending.delete(requestId);
+          }
+        })
+    );
+    const expected = REPLY_TYPE_BY_REQUEST_TYPE[request.type];
+    if (reply.type !== expected) {
+      return yield* new RunelinkProtocolError({
+        reason: `Unexpected reply type for ${request.type}: expected ${expected}, received ${reply.type}`,
+      });
     }
-  }
+    return reply;
+  });
 
-  private clearReconnectTimer(): void {
-    if (this.reconnectTimer === null) return;
-    clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = null;
-  }
+  return RunelinkConnection.of({
+    connect,
+    disconnect,
+    // The reply type was checked against the request type above.
+    request: sendRequest as RunelinkConnection["Service"]["request"],
+    status: SubscriptionRef.get(status),
+    statusChanges: SubscriptionRef.changes(status).pipe(Stream.changes),
+    updates: Stream.fromPubSub(updates),
+    errors: Stream.fromPubSub(issues),
+    capabilityIssues: Effect.sync(() =>
+      Option.map(Option.fromUndefinedOr(session), (active) =>
+        Object.keys(config.capabilities)
+          .filter((id) => !Object.hasOwn(active.negotiated, id))
+          .map((capability) => issueFor(active, capability))
+      )
+    ),
+  });
+});
 
-  private resolveConnectPromise(): void {
-    if (!this.connectPromiseResolve) return;
-    this.connectPromiseResolve();
-  }
-
-  private rejectConnectPromise(error: Error): void {
-    if (!this.connectPromiseReject) return;
-    this.connectPromiseReject(error);
-  }
-
-  private clearConnectPromise(): void {
-    this.connectPromise = null;
-    this.connectPromiseResolve = null;
-    this.connectPromiseReject = null;
-  }
-
-  private rejectAllPendingRequests(error: Error): void {
-    for (const pendingRequest of this.pendingRequests.values()) {
-      pendingRequest.reject(error);
-    }
-    this.pendingRequests.clear();
-  }
-}
+export const layer = (options: Options) =>
+  Layer.effect(RunelinkConnection, make(options));

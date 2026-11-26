@@ -1,115 +1,113 @@
-import { z } from "zod";
+import * as Schema from "effect/Schema";
+import { Timestamp } from "./primitives.js";
 import { UserRefSchema } from "./user.js";
 
-export const LocalAccountSchema = z.object({
-  user_name: z.string(),
-  user_host: z.string(),
-  password_hash: z.string(),
-  created_at: z.string().datetime({ offset: true }),
-  updated_at: z.string().datetime({ offset: true }),
+export const LocalAccountSchema = Schema.Struct({
+  user_name: Schema.String,
+  user_host: Schema.String,
+  password_hash: Schema.String,
+  created_at: Timestamp,
+  updated_at: Timestamp,
 });
 
-export const SignupRequestSchema = z.object({
-  name: z.string(),
-  password: z.string(),
+export const SignupRequestSchema = Schema.Struct({
+  name: Schema.String,
+  password: Schema.String,
 });
 
-export const RefreshTokenSchema = z.object({
-  token: z.string(),
-  user_name: z.string(),
-  user_host: z.string(),
-  client_id: z.string(),
-  issued_at: z.string().datetime({ offset: true }),
-  expires_at: z.string().datetime({ offset: true }),
-  revoked: z.boolean(),
+export const RefreshTokenSchema = Schema.Struct({
+  token: Schema.String,
+  user_name: Schema.String,
+  user_host: Schema.String,
+  client_id: Schema.String,
+  issued_at: Timestamp,
+  expires_at: Timestamp,
+  revoked: Schema.Boolean,
 });
 
-export const TokenRequestSchema = z.object({
-  grant_type: z.string(),
-  username: z.string().optional(),
-  password: z.string().optional(),
-  refresh_token: z.string().optional(),
-  scope: z.string().optional(),
-  client_id: z.string().optional(),
+export const TokenRequestSchema = Schema.Struct({
+  grant_type: Schema.String,
+  username: Schema.optional(Schema.String),
+  password: Schema.optional(Schema.String),
+  refresh_token: Schema.optional(Schema.String),
+  scope: Schema.optional(Schema.String),
+  client_id: Schema.optional(Schema.String),
 });
 
-export const TokenResponseSchema = z.object({
-  access_token: z.string(),
-  token_type: z.string(),
-  expires_in: z.number(),
-  refresh_token: z.string(),
-  scope: z.string(),
+export const TokenResponseSchema = Schema.Struct({
+  access_token: Schema.String,
+  token_type: Schema.String,
+  expires_in: Schema.Finite,
+  refresh_token: Schema.String,
+  scope: Schema.String,
 });
 
-export const OidcDiscoveryDocumentSchema = z.object({
-  issuer: z.string(),
-  jwks_uri: z.string(),
-  token_endpoint: z.string(),
-  userinfo_endpoint: z.string(),
-  grant_types_supported: z.array(z.string()),
-  response_types_supported: z.array(z.string()),
-  scopes_supported: z.array(z.string()),
-  token_endpoint_auth_methods_supported: z.array(z.string()),
+export const OidcDiscoveryDocumentSchema = Schema.Struct({
+  issuer: Schema.String,
+  jwks_uri: Schema.String,
+  token_endpoint: Schema.String,
+  userinfo_endpoint: Schema.String,
+  grant_types_supported: Schema.Array(Schema.String),
+  response_types_supported: Schema.Array(Schema.String),
+  scopes_supported: Schema.Array(Schema.String),
+  token_endpoint_auth_methods_supported: Schema.Array(Schema.String),
 });
 
-export const AuthTokenPasswordRequestSchema = z.object({
-  username: z.string(),
-  password: z.string(),
-  scope: z.string().nullable(),
-  client_id: z.string().nullable(),
+export const AuthTokenPasswordRequestSchema = Schema.Struct({
+  username: Schema.String,
+  password: Schema.String,
+  scope: Schema.NullOr(Schema.String),
+  client_id: Schema.NullOr(Schema.String),
 });
 
-export const AuthTokenRefreshRequestSchema = z.object({
-  refresh_token: z.string(),
-  scope: z.string().nullable(),
-  client_id: z.string().nullable(),
+export const AuthTokenRefreshRequestSchema = Schema.Struct({
+  refresh_token: Schema.String,
+  scope: Schema.NullOr(Schema.String),
+  client_id: Schema.NullOr(Schema.String),
 });
 
-export const PublicJwkSchema = z.object({
-  kty: z.string(),
-  crv: z.string(),
-  alg: z.string(),
-  kid: z.string(),
-  use: z.string(),
-  x: z.string(),
+export const PublicJwkSchema = Schema.Struct({
+  kty: Schema.String,
+  crv: Schema.String,
+  alg: Schema.String,
+  kid: Schema.String,
+  use: Schema.String,
+  x: Schema.String,
 });
 
-export const JwksResponseSchema = z.object({
-  keys: z.array(PublicJwkSchema),
+export const JwksResponseSchema = Schema.Struct({
+  keys: Schema.Array(PublicJwkSchema),
 });
 
-export const ClientAccessClaimsSchema = z.object({
-  iss: z.string(),
-  sub: z.string(),
-  aud: z.array(z.string()),
-  exp: z.number(),
-  iat: z.number(),
-  scope: z.string(),
-  client_id: z.string(),
+export const ClientAccessClaimsSchema = Schema.Struct({
+  iss: Schema.String,
+  sub: Schema.String,
+  aud: Schema.Array(Schema.String),
+  exp: Schema.Finite,
+  iat: Schema.Finite,
+  scope: Schema.String,
+  client_id: Schema.String,
 });
 
-export const FederationClaimsSchema = z.object({
-  iss: z.string(),
-  sub: z.string(),
-  aud: z.array(z.string()),
-  exp: z.number(),
-  iat: z.number(),
-  user_ref: UserRefSchema.optional(),
+export const FederationClaimsSchema = Schema.Struct({
+  iss: Schema.String,
+  sub: Schema.String,
+  aud: Schema.Array(Schema.String),
+  exp: Schema.Finite,
+  iat: Schema.Finite,
+  user_ref: Schema.optional(UserRefSchema),
 });
 
-export type LocalAccount = z.infer<typeof LocalAccountSchema>;
-export type SignupRequest = z.infer<typeof SignupRequestSchema>;
-export type RefreshToken = z.infer<typeof RefreshTokenSchema>;
-export type TokenRequest = z.infer<typeof TokenRequestSchema>;
-export type TokenResponse = z.infer<typeof TokenResponseSchema>;
-export type OidcDiscoveryDocument = z.infer<typeof OidcDiscoveryDocumentSchema>;
-export type JwksResponse = z.infer<typeof JwksResponseSchema>;
-export type AuthTokenPasswordRequest = z.infer<
-  typeof AuthTokenPasswordRequestSchema
->;
-export type AuthTokenRefreshRequest = z.infer<
-  typeof AuthTokenRefreshRequestSchema
->;
-export type PublicJwk = z.infer<typeof PublicJwkSchema>;
-export type ClientAccessClaims = z.infer<typeof ClientAccessClaimsSchema>;
-export type FederationClaims = z.infer<typeof FederationClaimsSchema>;
+export type LocalAccount = typeof LocalAccountSchema.Type;
+export type SignupRequest = typeof SignupRequestSchema.Type;
+export type RefreshToken = typeof RefreshTokenSchema.Type;
+export type TokenRequest = typeof TokenRequestSchema.Type;
+export type TokenResponse = typeof TokenResponseSchema.Type;
+export type OidcDiscoveryDocument = typeof OidcDiscoveryDocumentSchema.Type;
+export type JwksResponse = typeof JwksResponseSchema.Type;
+export type AuthTokenPasswordRequest =
+  typeof AuthTokenPasswordRequestSchema.Type;
+export type AuthTokenRefreshRequest = typeof AuthTokenRefreshRequestSchema.Type;
+export type PublicJwk = typeof PublicJwkSchema.Type;
+export type ClientAccessClaims = typeof ClientAccessClaimsSchema.Type;
+export type FederationClaims = typeof FederationClaimsSchema.Type;

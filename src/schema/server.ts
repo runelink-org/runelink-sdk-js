@@ -1,71 +1,73 @@
-import { z } from "zod";
-import { UserSchema, UserRefSchema } from "./user.js";
+import * as Schema from "effect/Schema";
 import { ServerChannelSchema } from "./channel.js";
+import { detailsUpdateFields } from "./edit.js";
+import { ExactStruct, NullDefault, Timestamp, Uuid } from "./primitives.js";
+import { UserRefSchema, UserSchema } from "./user.js";
 
-export const ServerSchema = z.object({
-  id: z.uuid(),
-  host: z.string(),
-  title: z.string(),
-  description: z.string().nullable().default(null),
-  created_at: z.string().datetime({ offset: true }),
+export const ServerSchema = Schema.Struct({
+  id: Uuid,
+  host: Schema.String,
+  title: Schema.String,
+  description: NullDefault(Schema.String),
+  created_at: Timestamp,
   // Preserve sub-millisecond precision for edit preconditions.
-  updated_at: z.string().datetime({ offset: true }),
+  updated_at: Timestamp,
 });
 
-export const NewServerSchema = z.object({
-  title: z.string(),
-  description: z.string().nullable().optional(),
+export const NewServerSchema = Schema.Struct({
+  title: Schema.String,
+  description: Schema.optional(Schema.NullOr(Schema.String)),
   // Also create the default channels: a "general" text channel.
-  default_channels: z.boolean().optional(),
+  default_channels: Schema.optional(Schema.Boolean),
 });
 
-export const ServerWithChannelsSchema = z.object({
+export const ServerWithChannelsSchema = Schema.Struct({
   server: ServerSchema,
-  channels: z.array(ServerChannelSchema),
+  channels: Schema.Array(ServerChannelSchema),
 });
 
-export const ServerRoleSchema = z.enum(["member", "admin"]);
+export const ServerRoleSchema = Schema.Literals(["member", "admin"]);
 
-export const ServerMembershipSchema = z.object({
+export const ServerMembershipSchema = Schema.Struct({
   server: ServerSchema,
   user_ref: UserRefSchema,
   role: ServerRoleSchema,
-  joined_at: z.string().datetime({ offset: true }),
-  updated_at: z.string().datetime({ offset: true }),
-  synced_at: z.string().datetime({ offset: true }).nullable(),
+  joined_at: Timestamp,
+  updated_at: Timestamp,
+  synced_at: Schema.NullOr(Timestamp),
 });
 
-export const FullServerMembershipSchema = z.object({
+export const FullServerMembershipSchema = Schema.Struct({
   server: ServerSchema,
   user: UserSchema,
   role: ServerRoleSchema,
-  joined_at: z.string().datetime({ offset: true }),
-  updated_at: z.string().datetime({ offset: true }),
-  synced_at: z.string().datetime({ offset: true }).nullable(),
+  joined_at: Timestamp,
+  updated_at: Timestamp,
+  synced_at: Schema.NullOr(Timestamp),
 });
 
-export const ServerMemberSchema = z.object({
+export const ServerMemberSchema = Schema.Struct({
   user: UserSchema,
   role: ServerRoleSchema,
-  joined_at: z.string().datetime({ offset: true }),
-  updated_at: z.string().datetime({ offset: true }),
+  joined_at: Timestamp,
+  updated_at: Timestamp,
 });
 
-export const NewServerMembershipSchema = z.object({
+export const NewServerMembershipSchema = Schema.Struct({
   user_ref: UserRefSchema,
-  server_id: z.uuid(),
-  server_host: z.string(),
+  server_id: Uuid,
+  server_host: Schema.String,
   role: ServerRoleSchema,
 });
 
-export type Server = z.infer<typeof ServerSchema>;
-export type NewServer = z.infer<typeof NewServerSchema>;
-export type ServerWithChannels = z.infer<typeof ServerWithChannelsSchema>;
-export type ServerRole = z.infer<typeof ServerRoleSchema>;
-export type ServerMembership = z.infer<typeof ServerMembershipSchema>;
-export type FullServerMembership = z.infer<typeof FullServerMembershipSchema>;
-export type ServerMember = z.infer<typeof ServerMemberSchema>;
-export type NewServerMembership = z.infer<typeof NewServerMembershipSchema>;
+export type Server = typeof ServerSchema.Type;
+export type NewServer = typeof NewServerSchema.Type;
+export type ServerWithChannels = typeof ServerWithChannelsSchema.Type;
+export type ServerRole = typeof ServerRoleSchema.Type;
+export type ServerMembership = typeof ServerMembershipSchema.Type;
+export type FullServerMembership = typeof FullServerMembershipSchema.Type;
+export type ServerMember = typeof ServerMemberSchema.Type;
+export type NewServerMembership = typeof NewServerMembershipSchema.Type;
 
-export { DetailsUpdateSchema as ServerUpdateSchema } from "./edit.js";
-export type { DetailsUpdate as ServerUpdate } from "./edit.js";
+export const ServerUpdateSchema = ExactStruct(detailsUpdateFields);
+export type ServerUpdate = typeof ServerUpdateSchema.Type;

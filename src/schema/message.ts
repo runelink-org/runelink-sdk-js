@@ -1,53 +1,54 @@
-import { z } from "zod";
-import { UserSchema, UserRefSchema } from "./user.js";
+import * as Schema from "effect/Schema";
 import { MetadataSchema } from "./metadata.js";
+import { ExactStruct, NullDefault, Timestamp, Uuid } from "./primitives.js";
+import { UserRefSchema, UserSchema } from "./user.js";
 
 const messageFields = {
-  metadata: MetadataSchema.nullable().optional(),
-  id: z.uuid(),
-  text_channel_id: z.uuid(),
-  author: UserSchema.nullable(),
-  reply_to: z.uuid().nullable(),
-  edited_at: z.string().datetime({ offset: true }).nullable().default(null),
-  created_at: z.string().datetime({ offset: true }),
+  metadata: Schema.optional(Schema.NullOr(MetadataSchema)),
+  id: Uuid,
+  text_channel_id: Uuid,
+  author: Schema.NullOr(UserSchema),
+  reply_to: Schema.NullOr(Uuid),
+  edited_at: NullDefault(Timestamp),
+  created_at: Timestamp,
   // Preserve sub-millisecond precision for edit preconditions.
-  updated_at: z.string().datetime({ offset: true }),
+  updated_at: Timestamp,
 };
 
-export const ActiveMessageSchema = z.object({
+export const ActiveMessageSchema = Schema.Struct({
   ...messageFields,
-  body: z.string(),
-  deleted_at: z.null(),
+  body: Schema.String,
+  deleted_at: Schema.Null,
 });
 
-export const DeletedMessageSchema = z.object({
+export const DeletedMessageSchema = Schema.Struct({
   ...messageFields,
-  body: z.null(),
-  deleted_at: z.string().datetime({ offset: true }),
+  body: Schema.Null,
+  deleted_at: Timestamp,
 });
 
 // Both runtime validation and TypeScript narrowing enforce the content state.
-export const MessageSchema = z.union([
+export const MessageSchema = Schema.Union([
   ActiveMessageSchema,
   DeletedMessageSchema,
 ]);
 
-export const NewMessageSchema = z.object({
-  metadata: MetadataSchema.nullable().optional(),
+export const NewMessageSchema = Schema.Struct({
+  metadata: Schema.optional(Schema.NullOr(MetadataSchema)),
   author: UserRefSchema,
-  body: z.string(),
-  reply_to: z.uuid().nullable().optional(),
+  body: Schema.String,
+  reply_to: Schema.optional(Schema.NullOr(Uuid)),
 });
 
-export type ActiveMessage = z.infer<typeof ActiveMessageSchema>;
-export type DeletedMessage = z.infer<typeof DeletedMessageSchema>;
-export type Message = z.infer<typeof MessageSchema>;
-export type NewMessage = z.infer<typeof NewMessageSchema>;
+export type ActiveMessage = typeof ActiveMessageSchema.Type;
+export type DeletedMessage = typeof DeletedMessageSchema.Type;
+export type Message = typeof MessageSchema.Type;
+export type NewMessage = typeof NewMessageSchema.Type;
 
-export const MessageUpdateSchema = z.strictObject({
-  body: z.string().nullable().optional(),
+export const MessageUpdateSchema = ExactStruct({
+  body: Schema.optional(Schema.NullOr(Schema.String)),
   // Omitted preserves metadata; null clears it; an object replaces it.
-  metadata: MetadataSchema.nullable().optional(),
-  expected_updated_at: z.string().datetime({ offset: true }),
+  metadata: Schema.optional(Schema.NullOr(MetadataSchema)),
+  expected_updated_at: Timestamp,
 });
-export type MessageUpdate = z.infer<typeof MessageUpdateSchema>;
+export type MessageUpdate = typeof MessageUpdateSchema.Type;
