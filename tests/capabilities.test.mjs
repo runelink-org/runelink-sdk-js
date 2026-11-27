@@ -108,6 +108,11 @@ test('requests match replies, ignore late replies, and fail when the socket clos
     socket.reply(request.id, { type: 'users_delete' });
     assert.equal((yield* Effect.flip(Fiber.join(request.fiber)))._tag, 'RunelinkProtocolError');
 
+    // A reply that does not decode still settles its request
+    request = yield* pending;
+    socket.reply(request.id, { type: 'unknown_reply' });
+    assert.equal((yield* Effect.flip(Fiber.join(request.fiber))).reason, 'Invalid message received');
+
     request = yield* pending;
     yield* Fiber.interrupt(request.fiber);
     socket.reply(request.id, { type: 'pong' });

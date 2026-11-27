@@ -89,6 +89,14 @@ const decodeIncoming = Schema.decodeUnknownEffect(
     ])
   )
 );
+const decodeUnparsedReply = Schema.decodeUnknownOption(
+  Schema.fromJsonString(
+    Schema.Struct({
+      type: Schema.Literals(["reply", "error"]),
+      data: Schema.Struct({ request_id: Schema.NullOr(Schema.String) }),
+    })
+  )
+);
 const decodeSupportedCapabilities = Schema.decodeUnknownSync(
   SupportedCapabilitiesSchema
 );
@@ -172,7 +180,7 @@ type Session = {
   readonly rejected: SupportedCapabilities | null;
   // Requests awaiting replies. Abandoned requests stay as `null` so their late
   // replies are not reported as unknown.
-  readonly pending: Map<string, Deferred.Deferred<WsReply, WsError> | null>;
+  readonly pending: Map<string, Deferred.Deferred<WsReply, ReplyError> | null>;
   readonly write: (text: string) => Effect.Effect<void, Socket.SocketError>;
   // Fails with why the session ended, once the next status is published,
   // since failing resumes the requests' handlers inline
@@ -180,6 +188,9 @@ type Session = {
 };
 
 type Release = Deferred.Deferred<never, RunelinkConnectError>;
+
+// A host's error reply, or a reply that failed to decode
+type ReplyError = WsError | RunelinkProtocolError;
 
 // How a socket attempt ended
 type AttemptEnd = {
@@ -369,6 +380,21 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
     );
   }
 
+  // Removes and settles a pending request in one step, so an interruption
+  // cannot drop it, returning whether it was waiting or abandoned
+  function settle(
+    active: Session,
+    requestId: string | null | undefined,
+    exit: Exit.Exit<WsReply, ReplyError>
+  ): boolean {
+    if (requestId == null) return false;
+    const pending = active.pending.get(requestId);
+    if (pending === undefined) return false;
+    active.pending.delete(requestId);
+    if (pending !== null) Deferred.doneUnsafe(pending, exit);
+    return true;
+  }
+
   // Untraced: it runs for every frame.
   const handleFrame = Effect.fnUntraced(function* (
     active: Session,
@@ -384,13 +410,18 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
     }
     const decoded = yield* Effect.result(decodeIncoming(frame));
     if (Result.isFailure(decoded)) {
-      return yield* PubSub.publish(
-        issues,
-        new RunelinkProtocolError({
-          reason: "Invalid message received",
-          cause: decoded.failure,
-        })
-      );
+      const error = new RunelinkProtocolError({
+        reason: "Invalid message received",
+        cause: decoded.failure,
+      });
+      // A reply that fails to decode still settles its request, which would
+      // otherwise wait forever
+      const requestId = Option.getOrUndefined(decodeUnparsedReply(frame))?.data
+        .request_id;
+      if (!settle(active, requestId, Exit.fail(error))) {
+        yield* PubSub.publish(issues, error);
+      }
+      return;
     }
     const envelope = decoded.success;
     if (envelope.type === "update") {
@@ -409,25 +440,18 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
       return yield* PubSub.publish(updates, envelope.data.update);
     }
     const requestId = envelope.data.request_id;
-    const pending =
-      requestId === null ? undefined : active.pending.get(requestId);
-    if (requestId === null || pending === undefined) {
-      return yield* PubSub.publish(
+    const exit =
+      envelope.type === "reply"
+        ? Exit.succeed(envelope.data.reply)
+        : Exit.fail(envelope.data.error);
+    if (!settle(active, requestId, exit)) {
+      yield* PubSub.publish(
         issues,
         new RunelinkProtocolError({
           reason: `Received ${envelope.type} for unknown request_id: ${String(requestId)}`,
         })
       );
     }
-    // Removing and settling in one step, so an interruption cannot drop it
-    active.pending.delete(requestId);
-    if (pending === null) return;
-    Deferred.doneUnsafe(
-      pending,
-      envelope.type === "reply"
-        ? Exit.succeed(envelope.data.reply)
-        : Exit.fail(envelope.data.error)
-    );
   });
 
   // One socket, from opening through negotiation until it closes
@@ -772,9 +796,13 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
       });
     }
 
-    const deferred = yield* Deferred.make<WsReply, WsError>();
+    const deferred = yield* Deferred.make<WsReply, ReplyError>();
     const replied = Deferred.await(deferred).pipe(
-      Effect.mapError((error) => hostError(error, host, capability))
+      Effect.mapError((error) =>
+        error instanceof RunelinkProtocolError
+          ? error
+          : hostError(error, host, capability)
+      )
     );
     const reply = yield* Effect.acquireUseRelease(
       Effect.sync(() => active.pending.set(requestId, deferred)),
