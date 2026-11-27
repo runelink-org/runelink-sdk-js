@@ -16,7 +16,7 @@ export const ServerSchema = Schema.Struct({
 
 export const NewServerSchema = Schema.Struct({
   title: Schema.String,
-  description: Schema.optional(Schema.NullOr(Schema.String)),
+  description: Schema.String.pipe(Schema.NullOr, Schema.optional),
   // Also create the default channels: a "general" text channel.
   default_channels: Schema.optional(Schema.Boolean),
 });

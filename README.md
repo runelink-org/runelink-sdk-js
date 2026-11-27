@@ -137,7 +137,7 @@ MIT
 
 ## Development
 
-Use Node.js 22.18+, 24.11+, or 26+ and pnpm 12.16.1. Run `pnpm install`, `pnpm format`, `pnpm build`, and `pnpm test`.
+Use Node.js 22.18+, 24.11+, or 26+ and pnpm 12.16.1. Run `pnpm install`, `pnpm format`, `pnpm build`, `pnpm lint`, `pnpm lint:effect`, and `pnpm test`.
 
 Tests use Vitest with `@effect/vitest`. Most tests import the SDK source. The package smoke test uses the build.
 

@@ -1,24 +1,12 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import * as Exit from "effect/Exit";
-import * as Schema from "effect/Schema";
 import {
   MessageSchema,
   NewMessageSchema,
   WsReplySchema,
   WsUpdateSchema,
 } from "../src/index.ts";
-import { parseVariant } from "./schema-assertions.ts";
-
-function parse<S extends Schema.ConstraintDecoder<unknown>>(
-  schema: S,
-  value: unknown
-) {
-  return Schema.decodeUnknownSync(schema)(value);
-}
-function ok(schema: Schema.ConstraintDecoder<unknown>, value: unknown) {
-  return Exit.isSuccess(Schema.decodeUnknownExit(schema)(value));
-}
+import { parseVariant, parse, ok, roundTripJson } from "./schema-assertions.ts";
 
 const base = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -92,7 +80,7 @@ it("updated_at retains microseconds through parsing and serialization", () => {
   assert.equal("update_version" in message, false);
   assert.equal(parse(MessageSchema, message).updated_at, timestamp);
   assert.equal(
-    parse(MessageSchema, JSON.parse(JSON.stringify(message))).updated_at,
+    parse(MessageSchema, roundTripJson(message)).updated_at,
     timestamp
   );
 });

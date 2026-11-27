@@ -9,6 +9,7 @@ export const NEGOTIATION_VERSION = 1;
 // Dates are not checked against the calendar, and revisions fit in 16 bits.
 export const CapabilityVersionSchema = Schema.String.check(
   Schema.isPattern(
+    // oxlint-disable-next-line eslint/require-unicode-regexp -- Effect emits a JSON Schema pattern for Unicode-flagged regexes, which changes this public schema.
     /^\d{4}\.(0[1-9]|1[0-2])\.(0[1-9]|[12]\d|3[01])(\.[1-9]\d{0,4})?$/
   ),
   Schema.makeFilter((version) => Number(version.split(".")[3] ?? 0) <= 65_535)
@@ -41,7 +42,9 @@ export type NegotiatedCapabilities = typeof NegotiatedCapabilitiesSchema.Type;
 function freezeCapabilities<T extends Record<string, string[]>>(
   capabilities: T
 ): Readonly<T> {
-  for (const versions of Object.values(capabilities)) Object.freeze(versions);
+  for (const versions of Object.values(capabilities)) {
+    Object.freeze(versions);
+  }
   return Object.freeze(capabilities);
 }
 

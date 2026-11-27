@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import * as Schema from "effect/Schema";
 import {
   ServerSchema,
   ServerChannelSchema,
@@ -11,14 +10,7 @@ import {
   WsReplySchema,
   WsUpdateSchema,
 } from "../src/index.ts";
-import { parseVariant } from "./schema-assertions.ts";
-
-function parse<S extends Schema.ConstraintDecoder<unknown>>(
-  schema: S,
-  value: unknown
-) {
-  return Schema.decodeUnknownSync(schema)(value);
-}
+import { parseVariant, parse, roundTripJson } from "./schema-assertions.ts";
 
 const timestamp = "2026-11-13T00:00:00Z";
 const server = {
@@ -79,10 +71,7 @@ it("missing and null resource descriptions retain the SDK's null representation"
 it("creation omits unused descriptions and edits preserve explicit null", () => {
   for (const schema of [NewServerSchema, NewServerChannelSchema]) {
     const parsed = parse(schema, channel);
-    assert.equal(
-      Object.hasOwn(JSON.parse(JSON.stringify(parsed)), "description"),
-      false
-    );
+    assert.equal(Object.hasOwn(roundTripJson(parsed), "description"), false);
     assert.equal(
       parse(schema, { ...channel, description: null }).description,
       null
@@ -95,7 +84,7 @@ it("creation omits unused descriptions and edits preserve explicit null", () => 
       { description: "Details" },
     ]) {
       const patch = { expected_updated_at: timestamp, ...fields };
-      assert.deepEqual(JSON.parse(JSON.stringify(parse(schema, patch))), patch);
+      assert.deepEqual(roundTripJson(parse(schema, patch)), patch);
     }
   }
 });

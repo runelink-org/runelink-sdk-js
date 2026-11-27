@@ -44,29 +44,23 @@ async function run(command, args, cwd) {
 
 async function checkPackage(directory) {
   await run(process.execPath, ["scripts/build.mjs"], root);
-  // Npm 11 prints an array; npm 12 keys the result by package name.
-  const [pack] = Object.values(
-    JSON.parse(
-      await run(
-        "npm",
-        ["pack", "--json", "--ignore-scripts", "--pack-destination", directory],
-        root
-      )
-    )
+  // With npm 11, pack prints an array; npm 12 keys the result by package name.
+  const output = await run(
+    "npm",
+    ["pack", "--json", "--ignore-scripts", "--pack-destination", directory],
+    root
   );
-  const files = pack.files.map((file) => {
-    return file.path;
-  });
-  const unexpected = files.filter((file) => {
-    return !allowedFiles.has(file) && !file.startsWith("dist/");
-  });
-  const missing = requiredFiles.filter((file) => {
-    return !files.includes(file);
-  });
+  /** @type {{ filename: string, files: { path: string }[] }[]} */
+  const [pack] = Object.values(JSON.parse(output));
+  const files = pack.files.map((file) => file.path);
+  const unexpected = files.filter(
+    (file) => !allowedFiles.has(file) && !file.startsWith("dist/")
+  );
+  const missing = requiredFiles.filter((file) => !files.includes(file));
   if (unexpected.length > 0 || missing.length > 0) {
     throw new Error(
-      `Unexpected packed files: ${unexpected.join(", ") || "none"}. ` +
-        `Missing packed files: ${missing.join(", ") || "none"}.`
+      `Unexpected packed files: ${unexpected.length === 0 ? "none" : unexpected.join(", ")}. ` +
+        `Missing packed files: ${missing.length === 0 ? "none" : missing.join(", ")}.`
     );
   }
 
@@ -123,11 +117,25 @@ async function checkPackage(directory) {
   console.log(`Checked ${pack.filename} (${files.length} files).`);
 }
 
+/** @param {unknown} error */
+function reportPackageError(error) {
+  if (typeof error === "object" && error !== null) {
+    for (const key of ["stderr", "stdout"]) {
+      const output = Reflect.get(error, key);
+      if (typeof output === "string" && output.length > 0) {
+        console.error(output);
+        return;
+      }
+    }
+  }
+  console.error(error);
+}
+
 const directory = await mkdtemp(path.join(tmpdir(), "runelink-sdk-package-"));
 try {
   await checkPackage(directory);
 } catch (error) {
-  console.error(error.stderr || error.stdout || error);
+  reportPackageError(error);
   process.exitCode = 1;
 } finally {
   await rm(directory, { recursive: true, force: true });

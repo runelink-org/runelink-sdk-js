@@ -6,7 +6,7 @@ import { ExactStruct, NullDefault, Timestamp, Uuid } from "./primitives.js";
 export const ServerChannelKindSchema = Schema.Literals(["text", "category"]);
 
 const serverChannelFields = {
-  metadata: Schema.optional(Schema.NullOr(MetadataSchema)),
+  metadata: MetadataSchema.pipe(Schema.NullOr, Schema.optional),
   id: Uuid,
   server_id: Uuid,
   title: Schema.String,
@@ -36,10 +36,10 @@ export const ServerChannelSchema = Schema.Union([
 
 // A new server channel, placed after its future siblings
 export const NewServerChannelSchema = Schema.Struct({
-  metadata: Schema.optional(Schema.NullOr(MetadataSchema)),
+  metadata: MetadataSchema.pipe(Schema.NullOr, Schema.optional),
   kind: ServerChannelKindSchema,
   title: Schema.String,
-  description: Schema.optional(Schema.NullOr(Schema.String)),
+  description: Schema.String.pipe(Schema.NullOr, Schema.optional),
   parent_channel_id: Schema.NullOr(Uuid),
 });
 
@@ -48,7 +48,7 @@ export const NewServerChannelSchema = Schema.Struct({
 export const ServerChannelMoveSchema = Schema.Struct({
   parent_channel_id: Schema.NullOr(Uuid),
   // A u32 on the host
-  index: Schema.Number.check(Schema.isUint32()),
+  index: Schema.Finite.check(Schema.isUint32()),
 });
 
 export type ServerChannelKind = typeof ServerChannelKindSchema.Type;
@@ -58,6 +58,6 @@ export type ServerChannelMove = typeof ServerChannelMoveSchema.Type;
 
 export const ServerChannelUpdateSchema = ExactStruct({
   ...detailsUpdateFields,
-  metadata: Schema.optional(Schema.NullOr(MetadataSchema)),
+  metadata: MetadataSchema.pipe(Schema.NullOr, Schema.optional),
 });
 export type ServerChannelUpdate = typeof ServerChannelUpdateSchema.Type;
