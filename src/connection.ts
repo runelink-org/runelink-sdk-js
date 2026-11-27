@@ -119,6 +119,15 @@ export type Options = (
   readonly capabilities?: SupportedCapabilities;
 };
 
+export type RequestOptions = {
+  /**
+   * Whether to connect if needed. When false, the request is sent only on the
+   * current connection, and fails with `RunelinkDisconnectedError` if there is
+   * none.
+   */
+  readonly connect?: boolean;
+};
+
 export class RunelinkConnection extends Context.Service<
   RunelinkConnection,
   {
@@ -129,9 +138,13 @@ export class RunelinkConnection extends Context.Service<
     readonly connect: Effect.Effect<void, RunelinkConnectError>;
     /** Closes the websocket, stops reconnecting, and fails waiting calls. */
     readonly disconnect: Effect.Effect<void>;
-    /** Connects if needed, sends a validated request, and waits for its reply. */
+    /**
+     * Connects if needed, unless `options.connect` is false, then sends a
+     * validated request and waits for its reply.
+     */
     readonly request: <Request extends WsRequest>(
-      request: Request
+      request: Request,
+      options?: RequestOptions
     ) => Effect.Effect<ReplyFor<Request["type"]>, RunelinkRequestFailure>;
     readonly status: Effect.Effect<Status>;
     /** The current status, then each change. */
@@ -713,7 +726,8 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
   );
 
   const sendRequest = Effect.fn("RunelinkConnection.request")(function* (
-    input: WsRequest
+    input: WsRequest,
+    options?: RequestOptions
   ): Effect.fn.Return<WsReply, RunelinkRequestFailure> {
     const invalid = (cause: Schema.SchemaError) =>
       new RunelinkInvalidRequestError({
@@ -728,7 +742,7 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
     const request = envelope.data.request;
     // Serialized before connecting, so later changes to the input are not sent
     const text = yield* encodeJson(envelope).pipe(Effect.mapError(invalid));
-    yield* connect;
+    if (options?.connect !== false) yield* connect;
     const active = session;
     if (active === undefined) return yield* new RunelinkDisconnectedError();
 

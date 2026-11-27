@@ -62,7 +62,7 @@ program.pipe(
 
 - `connect` opens the websocket if needed and succeeds after capability negotiation. While automatic reconnection is allowed, it waits through failed attempts.
 - `disconnect` closes the websocket, stops reconnecting, and fails waiting `connect` and `request` calls with `RunelinkDisconnectedError`. A later `connect` or `request` opens it again.
-- `request(request)` connects if needed, validates and sends a `WsRequest`, and succeeds with the matching reply, typed as `ReplyFor<typeof request.type>`.
+- `request(request)` connects if needed, validates and sends a `WsRequest`, and succeeds with the matching reply, typed as `ReplyFor<typeof request.type>`. `request(request, { connect: false })` sends only on the current connection and fails with `RunelinkDisconnectedError` if it is not connected, for apps that handle reconnecting and authenticating themselves.
 - `status` is one of `disconnected`, `connecting`, `connected`, or `reconnecting`, and `statusChanges` streams the current status, then each change.
 - `updates` streams validated `WsUpdate` push events from the time the stream starts running, across reconnects. Fork consumers with `{ startImmediately: true }` so they subscribe before the fork returns; otherwise updates that arrive before the fiber first runs are missed.
 - `errors` streams problems outside of any one request: closed sockets, incompatible hosts, and messages the SDK cannot use.
