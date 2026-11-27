@@ -65,7 +65,7 @@ program.pipe(
 - `request(request)` connects if needed, validates and sends a `WsRequest`, and succeeds with the matching reply, typed as `ReplyFor<typeof request.type>`. `request(request, { connect: false })` sends only on the socket that is connected (has finished negotiation) when the request starts, and fails with `RunelinkDisconnectedError` instead of connecting if there is none or it has been replaced, for apps that handle reconnecting and authenticating themselves.
 - `status` is one of `disconnected`, `connecting`, `connected`, or `reconnecting`, and `statusChanges` streams the current status, then each change.
 - `updates` streams validated `WsUpdate` push events from the time the stream starts running, across reconnects. Fork consumers with `{ startImmediately: true }` so they subscribe before the fork returns; otherwise updates that arrive before the fiber first runs are missed.
-- `errors` streams problems outside of any one request: closed sockets, incompatible hosts, and messages the SDK cannot use.
+- `errors` streams problems outside of any one request: closed sockets, incompatible hosts, and messages the SDK cannot use. A reply or error that cannot be decoded but names a pending request fails that request with `RunelinkProtocolError` instead.
 
 The streams end when the connection's scope closes.
 - `capabilityIssues` is each offered capability the host did not agree to, with offered and host-supported versions, an actionable reason, and a message, or `Option.none()` before negotiation and after disconnecting. Older hosts produce `unknown` with `supportedVersions: null`; an empty host version list means the capability is missing.
