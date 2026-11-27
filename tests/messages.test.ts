@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { it } from "@effect/vitest";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 import {
@@ -7,12 +7,16 @@ import {
   NewMessageSchema,
   WsReplySchema,
   WsUpdateSchema,
-} from "../dist/index.js";
+} from "../src/index.ts";
+import { parseVariant } from "./schema-assertions.ts";
 
-function parse(schema, value) {
+function parse<S extends Schema.ConstraintDecoder<unknown, never>>(
+  schema: S,
+  value: unknown
+) {
   return Schema.decodeUnknownSync(schema)(value);
 }
-function ok(schema, value) {
+function ok(schema: Schema.ConstraintDecoder<unknown, never>, value: unknown) {
   return Exit.isSuccess(Schema.decodeUnknownExit(schema)(value));
 }
 
@@ -25,7 +29,7 @@ const base = {
   updated_at: "2026-10-19T12:00:00Z",
 };
 
-test("message state validates body and deletion together", () => {
+it("message state validates body and deletion together", () => {
   const active = parse(MessageSchema, {
     ...base,
     body: "hello",
@@ -47,26 +51,23 @@ test("message state validates body and deletion together", () => {
     { body: null, deleted_at: false },
     { body: null, deleted_at: 0 },
   ]) {
-    assert.equal(
-      ok(MessageSchema, { ...base, ...fields }),
-      false
-    );
+    assert.equal(ok(MessageSchema, { ...base, ...fields }), false);
   }
 });
 
-test("deletions carry tombstones in replies and updates", () => {
+it("deletions carry tombstones in replies and updates", () => {
   const data = { ...base, body: null, deleted_at: base.updated_at };
   assert.equal(
-    parse(WsReplySchema, { type: "messages_delete", data }).data.body,
+    parseVariant(WsReplySchema, { type: "messages_delete", data }).data.body,
     null
   );
   assert.equal(
-    parse(WsUpdateSchema, { type: "message_upserted", data }).data.body,
+    parseVariant(WsUpdateSchema, { type: "message_upserted", data }).data.body,
     null
   );
 });
 
-test("new messages accept omitted, null, and explicit reply targets", () => {
+it("new messages accept omitted, null, and explicit reply targets", () => {
   const message = {
     author: { name: "test", host: "localhost" },
     body: "hello",
@@ -76,7 +77,7 @@ test("new messages accept omitted, null, and explicit reply targets", () => {
   }
 });
 
-test("updated_at retains microseconds through parsing and serialization", () => {
+it("updated_at retains microseconds through parsing and serialization", () => {
   const timestamp = "2026-10-28T12:00:00.123456Z";
   const message = parse(MessageSchema, {
     ...base,

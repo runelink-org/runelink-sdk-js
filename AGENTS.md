@@ -5,7 +5,7 @@
 - Always run checks in this order after making changes:
   1. `pnpm format` - Format code
   2. `pnpm build` - Verify TypeScript compilation and bundle
-  3. `pnpm test` - Run the tests against the build
+  3. `pnpm test` - Run the Vitest suite and the built-package smoke test
 - Validate unknown data with Effect Schema instead of using `as any` or type assertions
 - Ensure all exports are properly typed and tested
 
