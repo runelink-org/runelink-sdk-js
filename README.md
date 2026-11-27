@@ -139,6 +139,8 @@ MIT
 
 Use Node.js 22.18+, 24.11+, or 26+ and pnpm 12.16.1. Run `pnpm install`, `pnpm format`, `pnpm build`, and `pnpm test`.
 
+Tests use Vitest with `@effect/vitest`. Most tests import the SDK source. The package smoke test uses the build.
+
 Builds use TypeScript 7 for declarations and esbuild for ESM and CommonJS bundles. Use `pnpm dev` to watch for changes, and stop it before building or packing separately. `pnpm pack` runs a fresh build.
 
 Run `pnpm check:package` to build, pack, and install the package in a clean consumer, then check the ESM import, the CommonJS require, and the TypeScript declarations for both.

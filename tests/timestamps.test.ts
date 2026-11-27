@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { it } from "@effect/vitest";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 import {
@@ -16,12 +16,15 @@ import {
   ServerSchema,
   ServerUpdateSchema,
   UserSchema,
-} from "../dist/index.js";
+} from "../src/index.ts";
 
-function parse(schema, value) {
+function parse<S extends Schema.ConstraintDecoder<unknown, never>>(
+  schema: S,
+  value: unknown
+) {
   return Schema.decodeUnknownSync(schema)(value);
 }
-function ok(schema, value) {
+function ok(schema: Schema.ConstraintDecoder<unknown, never>, value: unknown) {
   return Exit.isSuccess(Schema.decodeUnknownExit(schema)(value));
 }
 
@@ -130,8 +133,8 @@ for (const [name, schema, data] of [
       revoked: false,
     },
   ],
-]) {
-  test(`${name} preserves timestamps as precise strings`, () => {
+] as const) {
+  it(`${name} preserves timestamps as precise strings`, () => {
     const parsed = parse(schema, data);
     assert.equal("update_version" in parsed, false);
     assert.deepEqual(parsed, data);
@@ -140,17 +143,13 @@ for (const [name, schema, data] of [
     for (const [field, value] of Object.entries(data)) {
       if (!field.endsWith("_at") || value === null) continue;
       for (const invalid of [0, new Date(timestamp), "invalid"]) {
-        assert.equal(
-          ok(schema, { ...data, [field]: invalid }),
-          false,
-          field
-        );
+        assert.equal(ok(schema, { ...data, [field]: invalid }), false, field);
       }
     }
   });
 }
 
-test("optional timestamps preserve null and reject malformed values", () => {
+it("optional timestamps preserve null and reject malformed values", () => {
   assert.equal(parse(UserSchema, { ...user, synced_at: null }).synced_at, null);
   assert.equal(
     parse(ServerMembershipSchema, { ...membership, synced_at: null }).synced_at,
@@ -161,19 +160,16 @@ test("optional timestamps preserve null and reject malformed values", () => {
     null
   );
   for (const edited_at of [false, 0, new Date(timestamp), "invalid"]) {
-    assert.equal(
-      ok(MessageSchema, { ...message, edited_at }),
-      false
-    );
+    assert.equal(ok(MessageSchema, { ...message, edited_at }), false);
   }
 });
 
-test("edit requests accept the original updated_at without conversion", () => {
+it("edit requests accept the original updated_at without conversion", () => {
   for (const [schema, fields] of [
     [MessageUpdateSchema, { body: "Edited message" }],
     [ServerChannelUpdateSchema, { title: "Edited channel" }],
     [ServerUpdateSchema, { description: "Edited description" }],
-  ]) {
+  ] as const) {
     assert.equal(
       parse(schema, { ...fields, expected_updated_at: timestamp })
         .expected_updated_at,
@@ -182,8 +178,24 @@ test("edit requests accept the original updated_at without conversion", () => {
   }
 });
 
-test("metadata and description operations use the new version", () => {
-  for (const capability of ["messages.update", "messages.create", "channels.update", "channels.create", "channels.read", "channels.events", "channels.move", "servers.update", "servers.read", "servers.events", "memberships.read", "memberships.write", "memberships.events"]) {
-    assert.deepEqual(CLIENT_WS_SUPPORTED_CAPABILITIES[capability], ["2026.11.13"]);
+it("metadata and description operations use the new version", () => {
+  for (const capability of [
+    "messages.update",
+    "messages.create",
+    "channels.update",
+    "channels.create",
+    "channels.read",
+    "channels.events",
+    "channels.move",
+    "servers.update",
+    "servers.read",
+    "servers.events",
+    "memberships.read",
+    "memberships.write",
+    "memberships.events",
+  ]) {
+    assert.deepEqual(CLIENT_WS_SUPPORTED_CAPABILITIES[capability], [
+      "2026.11.13",
+    ]);
   }
 });
