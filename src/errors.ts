@@ -125,6 +125,8 @@ export class RunelinkConnectionError extends Schema.TaggedError<RunelinkConnecti
   {
     code: Schema.Number,
     reason: Schema.String,
+    // What failed without a close frame, or for a URL with secrets, only its
+    // phase and error name
     cause: Schema.optional(Schema.Defect()),
   }
 ) {

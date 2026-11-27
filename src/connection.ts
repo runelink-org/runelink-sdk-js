@@ -6,6 +6,7 @@ import * as Exit from "effect/Exit";
 import * as FiberHandle from "effect/FiberHandle";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 import * as PubSub from "effect/PubSub";
 import * as Random from "effect/Random";
 import * as Result from "effect/Result";
@@ -249,39 +250,82 @@ function normalizeOptions(options: Options) {
   };
 }
 
+const parseUrl = Option.liftThrowable((url: string) => new URL(url));
+
+// Schemes whose URLs keep their host and path in errors. Any part of another
+// URL may hold a secret, such as `user:pw@host/ws`, parsed as the scheme
+// `user:`.
+const SHOWN_SCHEMES = new Set(["ws:", "wss:", "http:", "https:", "ws+unix:"]);
+
 // The URL without its credentials, query, or fragment, which may hold secrets,
 // or a placeholder for a URL that does not parse, such as a relative one that
-// a browser resolves against the page
+// a browser resolves against the page, or whose scheme is not in
+// `SHOWN_SCHEMES`
 function redactUrl(url: string): string {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return "(redacted URL)";
-  }
-  const href = parsed.href;
-  parsed.username = "";
-  parsed.password = "";
-  parsed.search = "";
-  parsed.hash = "";
-  return parsed.href === href ? url : parsed.href;
+  const shown = Option.filter(parseUrl(url), (parsed) =>
+    SHOWN_SCHEMES.has(parsed.protocol)
+  );
+  return Option.match(shown, {
+    onNone: () => "(redacted URL)",
+    onSome: (parsed) => {
+      const href = parsed.href;
+      parsed.username = "";
+      parsed.password = "";
+      parsed.search = "";
+      parsed.hash = "";
+      return parsed.href === href ? url : parsed.href;
+    },
+  });
 }
 
-function connectionError(error: Socket.SocketError): RunelinkConnectionError {
+// A failure's phase and error name, leaving out the socket event, which keeps
+// the URL, and any message, which may quote it
+function describeCause(cause: unknown): string {
+  if (Socket.isSocketError(cause)) {
+    const inner =
+      "cause" in cause.reason ? describeCause(cause.reason.cause) : "";
+    return inner.length > 0 ? `${cause.message}: ${inner}` : cause.message;
+  }
+  // An `ErrorEvent`, such as from Node's or the `ws` package's socket
+  const error =
+    !(cause instanceof Error) && Predicate.hasProperty(cause, "error")
+      ? cause.error
+      : cause;
+  return error instanceof Error ? error.name : "";
+}
+
+// An unknown cause may throw, such as from a getter
+const redactCause = Option.liftThrowable(function (
+  cause: unknown
+): Error | undefined {
+  const text = describeCause(cause);
+  return text.length > 0 ? new Error(text) : undefined;
+});
+
+function connectionError(
+  error: Socket.SocketError,
+  redacted: boolean
+): RunelinkConnectionError {
   return error.reason._tag === "SocketCloseError"
     ? new RunelinkConnectionError({
         code: error.reason.code,
         reason: error.reason.closeReason?.trim() ?? "",
       })
-    : abnormalClose(error);
+    : abnormalClose(error, redacted);
 }
 
-/** A socket that failed without a close frame. */
-function abnormalClose(cause: unknown): RunelinkConnectionError {
+/**
+ * A socket that failed without a close frame. For a URL with secrets, its cause
+ * keeps only the failure's phase and error name.
+ */
+function abnormalClose(
+  cause: unknown,
+  redacted: boolean
+): RunelinkConnectionError {
   return new RunelinkConnectionError({
     code: ABNORMAL_CLOSE_CODE,
     reason: "",
-    cause,
+    cause: redacted ? Option.getOrUndefined(redactCause(cause)) : cause,
   });
 }
 
@@ -348,6 +392,9 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
 ) {
   const config = normalizeOptions(options);
   const host = options.host ?? redactUrl(options.url);
+  // Whether the URL holds what `redactUrl` leaves out, which a socket's error
+  // may quote
+  const redacted = options.url !== undefined && host !== options.url;
   const webSocketConstructor = yield* Socket.WebSocketConstructor;
   const status = yield* SubscriptionRef.make<Status>("disconnected");
   const updates = yield* PubSub.unbounded<WsUpdate>();
@@ -495,21 +542,23 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
       // `readyState` and adding its listener
       Effect.provideService(Scheduler.PreventSchedulerYield, true),
       Effect.mapError((error): AttemptEnd => ({
-        error: connectionError(error),
+        error: connectionError(error, redacted),
       })),
       // A browser may refuse the `ws` fallback when constructing the socket,
       // such as on an `https` page, which is a failed attempt rather than a
       // reason to stop
       Effect.catchDefect((cause) =>
         url === insecureUrl
-          ? Effect.fail<AttemptEnd>({ error: abnormalClose(cause) })
+          ? Effect.fail<AttemptEnd>({
+              error: abnormalClose(cause, redacted),
+            })
           : Effect.die(cause)
       )
     );
     openedUrl ??= url;
     const writer = yield* socket.writer;
     const closed = (error: Socket.SocketError): AttemptEnd => ({
-      error: connectionError(error),
+      error: connectionError(error, redacted),
     });
     const incompatible = (reason: string): AttemptEnd => ({
       error: new RunelinkIncompatibleHostError({ host, reason }),
@@ -715,7 +764,7 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
   }).pipe(
     // A defect, such as the socket constructor rejecting the URL, also ends it
     Effect.catchDefect((cause) => {
-      const error = abnormalClose(cause);
+      const error = abnormalClose(cause, redacted);
       return PubSub.publish(issues, error).pipe(
         Effect.andThen(retire(error, false, () => {}))
       );

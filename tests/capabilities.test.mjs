@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { inspect } from 'node:util';
 import * as Deferred from 'effect/Deferred';
 import * as Effect from 'effect/Effect';
 import * as Fiber from 'effect/Fiber';
@@ -95,6 +96,10 @@ test('errors report URLs without credentials, query, or fragment', async () => {
   for (const [url, host] of [
     ['ws://bot:pw@localhost:7000/ws?access_token=x#y', 'ws://localhost:7000/ws'],
     ['/ws?access_token=x', '(redacted URL)'],
+    ['bot:pw@localhost:7000/ws', '(redacted URL)'],
+    ['bot:/pw@localhost:7000/ws', '(redacted URL)'],
+    ['file:pw@localhost/ws', '(redacted URL)'],
+    ['ws+unix:///tmp/sock:/ws?access_token=x', 'ws+unix:///tmp/sock:/ws'],
     ['WS://LOCALHOST:7000/ws', 'WS://LOCALHOST:7000/ws'],
   ]) {
     await run(Effect.gen(function* () {
@@ -105,6 +110,30 @@ test('errors report URLs without credentials, query, or fragment', async () => {
       assert.equal(dialed, url);
       assert.equal(error.host, host);
       assert.ok(error.message.startsWith(`${host} is incompatible`));
+    }));
+  }
+});
+test('connection error causes leave out the socket and its message for URLs with secrets', async () => {
+  function failingSocket(dialUrl) {
+    const socket = Object.assign(new EventTarget(), { url: dialUrl, readyState: 0, close() {} });
+    queueMicrotask(() => socket.dispatchEvent(Object.assign(new Event('error'), { error: new Error(`connect ECONNREFUSED ${dialUrl}`) })));
+    return socket;
+  }
+  const secretUrl = 'ws://bot:pw@localhost:7000/ws?access_token=secret-token#frag';
+  for (const [url, makeSocket, cause] of [
+    [secretUrl, failingSocket, 'An error occurred during Open: Error'],
+    [secretUrl, () => { throw new SyntaxError(`Invalid URL: ${secretUrl}`); }, 'SyntaxError'],
+    [secretUrl, () => { throw { get error() { throw new Error('getter'); } }; }, undefined],
+    ['ws://localhost:7000/ws', failingSocket, 'An error occurred during Open'],
+  ]) {
+    await run(Effect.gen(function* () {
+      const conn = yield* RunelinkConnection.make({ url, autoReconnect: false })
+        .pipe(Effect.provideService(Socket.WebSocketConstructor, makeSocket));
+      const error = yield* Effect.flip(conn.connect);
+      assert.equal(error._tag, 'RunelinkConnectionError');
+      assert.equal(cause === undefined ? error.cause : error.cause.message, cause);
+      if (url === secretUrl) assert.ok(!inspect(error, { depth: Infinity }).includes('secret-token'));
+      else assert.equal(error.cause.reason.cause.type, 'error');
     }));
   }
 });

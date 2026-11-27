@@ -80,7 +80,7 @@ Errors are `Schema.TaggedError` classes, so they can be handled with `Effect.cat
   - `RunelinkNotFoundError`: a resource the request names does not exist
   - `RunelinkConflictError`: the request conflicts with the resource's current state, such as an edit of an outdated version or a duplicate
   - `RunelinkInternalError`: the host could not complete the request, such as when a peer host is unavailable, or replied with an error `code` the SDK does not know
-- `RunelinkConnectionError`: the websocket closed or could not open, with its close `code` and `reason`
+- `RunelinkConnectionError`: the websocket closed or could not open, with its close `code` and `reason`. For a `url` with credentials, a query, or a fragment, or one the SDK does not recognize, `cause` keeps only a short summary of what failed, since the socket's error may quote the URL.
 - `RunelinkIncompatibleHostError`: capability negotiation failed
 - `RunelinkUnsupportedCapabilityError`: the request needs a capability that this client does not offer or the host did not agree to, or the host replied that it does not support it. It fails without closing the connection.
 - `RunelinkDisconnectedError`: `disconnect` cancelled the call, or the connection dropped before the request was sent
