@@ -194,7 +194,6 @@ type ReplyError = WsError | RunelinkProtocolError;
 
 // How a socket attempt ended
 type AttemptEnd = {
-  readonly opened: boolean;
   readonly error: RunelinkConnectionError | RunelinkIncompatibleHostError;
 };
 
@@ -256,11 +255,16 @@ function connectionError(error: Socket.SocketError): RunelinkConnectionError {
         code: error.reason.code,
         reason: error.reason.closeReason?.trim() ?? "",
       })
-    : new RunelinkConnectionError({
-        code: ABNORMAL_CLOSE_CODE,
-        reason: "",
-        cause: error,
-      });
+    : abnormalClose(error);
+}
+
+/** A socket that failed without a close frame. */
+function abnormalClose(cause: unknown): RunelinkConnectionError {
+  return new RunelinkConnectionError({
+    code: ABNORMAL_CLOSE_CODE,
+    reason: "",
+    cause,
+  });
 }
 
 /** The error for a host's error reply, by its code. */
@@ -346,12 +350,15 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
   // delay. Connecting during a dial joins it, as the old SDK did.
   let wake = Deferred.makeUnsafe<void>();
   let dialing = false;
-  let activeUrl = options.url ?? getWsUrl(options.host, true);
+  const primaryUrl = options.url ?? getWsUrl(options.host, true);
   // Host connections may fall back to this if the secure socket never opens
   const insecureUrl =
     options.host !== undefined && config.transportSecurity === "prefer-secure"
       ? getWsUrl(options.host, false)
       : undefined;
+  // The URL the first socket to open used, which later attempts start from
+  let openedUrl: string | undefined;
+  let activeUrl = primaryUrl;
   // Attempts' releases that the supervisor has not completed yet, with the
   // error each attempt ended with, if it has
   const unreleased = new Map<Release, RunelinkConnectError | undefined>();
@@ -470,17 +477,23 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
       // `readyState` and adding its listener
       Effect.provideService(Scheduler.PreventSchedulerYield, true),
       Effect.mapError((error): AttemptEnd => ({
-        opened: false,
         error: connectionError(error),
-      }))
+      })),
+      // A browser may refuse the `ws` fallback when constructing the socket,
+      // such as on an `https` page, which is a failed attempt rather than a
+      // reason to stop
+      Effect.catchDefect((cause) =>
+        url === insecureUrl
+          ? Effect.fail<AttemptEnd>({ error: abnormalClose(cause) })
+          : Effect.die(cause)
+      )
     );
+    openedUrl ??= url;
     const writer = yield* socket.writer;
     const closed = (error: Socket.SocketError): AttemptEnd => ({
-      opened: true,
       error: connectionError(error),
     });
     const incompatible = (reason: string): AttemptEnd => ({
-      opened: true,
       error: new RunelinkIncompatibleHostError({ host, reason }),
     });
     // A 1002 only means an incompatible host during negotiation. Later, it is
@@ -627,10 +640,18 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
     end: AttemptEnd,
     release: () => void
   ) {
-    if (!end.opened && insecureUrl !== undefined && activeUrl !== insecureUrl) {
+    // Falls back right away while `wss` has never opened, but starts each later
+    // attempt from `wss` until a socket opens, so a host that is down does not
+    // leave the connection on `ws`
+    if (
+      openedUrl === undefined &&
+      insecureUrl !== undefined &&
+      activeUrl !== insecureUrl
+    ) {
       activeUrl = insecureUrl;
       return true;
     }
+    activeUrl = openedUrl ?? primaryUrl;
     const retry =
       end.error._tag === "RunelinkConnectionError" && shouldReconnect();
     yield* PubSub.publish(issues, end.error);
@@ -676,11 +697,7 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
   }).pipe(
     // A defect, such as the socket constructor rejecting the URL, also ends it
     Effect.catchDefect((cause) => {
-      const error = new RunelinkConnectionError({
-        code: ABNORMAL_CLOSE_CODE,
-        reason: "",
-        cause,
-      });
+      const error = abnormalClose(cause);
       return PubSub.publish(issues, error).pipe(
         Effect.andThen(retire(error, false, () => {}))
       );
@@ -719,6 +736,8 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
     looping = false;
     dialing = false;
     reconnectAttempt = 0;
+    hasConnectedOnce = false;
+    activeUrl = openedUrl ?? primaryUrl;
     wake = Deferred.makeUnsafe();
     const waiting = ready;
     ready = undefined;
