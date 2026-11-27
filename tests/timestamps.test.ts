@@ -18,13 +18,13 @@ import {
   UserSchema,
 } from "../src/index.ts";
 
-function parse<S extends Schema.ConstraintDecoder<unknown, never>>(
+function parse<S extends Schema.ConstraintDecoder<unknown>>(
   schema: S,
   value: unknown
 ) {
   return Schema.decodeUnknownSync(schema)(value);
 }
-function ok(schema: Schema.ConstraintDecoder<unknown, never>, value: unknown) {
+function ok(schema: Schema.ConstraintDecoder<unknown>, value: unknown) {
   return Exit.isSuccess(Schema.decodeUnknownExit(schema)(value));
 }
 

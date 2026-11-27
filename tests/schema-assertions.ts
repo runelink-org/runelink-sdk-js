@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import * as Schema from "effect/Schema";
 
 export function parseVariant<
-  S extends Schema.ConstraintDecoder<{ readonly type: string }, never>,
+  S extends Schema.ConstraintDecoder<{ readonly type: string }>,
   Tag extends S["Type"]["type"],
 >(
   schema: S,

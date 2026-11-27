@@ -6,7 +6,7 @@ import {
   NewServerSchema,
 } from "../src/index.ts";
 
-function parse<S extends Schema.ConstraintDecoder<unknown, never>>(
+function parse<S extends Schema.ConstraintDecoder<unknown>>(
   schema: S,
   value: unknown
 ) {

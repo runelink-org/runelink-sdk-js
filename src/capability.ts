@@ -183,91 +183,122 @@ export const CLIENT_WS_SUPPORTED_CAPABILITIES: SupportedCapabilities =
 
 export function requestCapability(request: WsRequest): ClientWsCapabilityId {
   switch (request.type) {
-    case "ping":
+    case "ping": {
       return "ping";
+    }
     case "oidc_discovery":
-    case "oidc_jwks":
+    case "oidc_jwks": {
       return "auth.discovery";
-    case "connection_state":
+    }
+    case "connection_state": {
       return "connection.state";
-    case "auth_signup":
+    }
+    case "auth_signup": {
       return "auth.signup";
+    }
     case "auth_token_password":
-    case "auth_token_refresh":
+    case "auth_token_refresh": {
       return "auth.token";
-    case "auth_token_access":
+    }
+    case "auth_token_access": {
       return "auth.authenticate";
-    case "auth_userinfo":
+    }
+    case "auth_userinfo": {
       return "auth.userinfo";
-    case "auth_register_client":
+    }
+    case "auth_register_client": {
       return "auth.register-client";
-    case "users_create":
+    }
+    case "users_create": {
       return "users.create";
+    }
     case "users_get_all":
     case "users_get_by_ref":
-    case "users_get_associated_hosts":
+    case "users_get_associated_hosts": {
       return "users.read";
-    case "users_delete":
+    }
+    case "users_delete": {
       return "users.delete";
+    }
     case "memberships_get_by_user":
     case "memberships_get_members_by_server":
-    case "memberships_get_by_user_and_server":
+    case "memberships_get_by_user_and_server": {
       return "memberships.read";
+    }
     case "memberships_upsert":
-    case "memberships_delete":
+    case "memberships_delete": {
       return "memberships.write";
-    case "servers_update":
+    }
+    case "servers_update": {
       return "servers.update";
-    case "servers_create":
+    }
+    case "servers_create": {
       return "servers.create";
+    }
     case "servers_get_all":
     case "servers_get_by_id":
-    case "servers_get_with_channels":
+    case "servers_get_with_channels": {
       return "servers.read";
-    case "servers_delete":
+    }
+    case "servers_delete": {
       return "servers.delete";
-    case "channels_update":
+    }
+    case "channels_update": {
       return "channels.update";
-    case "channels_create":
+    }
+    case "channels_create": {
       return "channels.create";
+    }
     case "channels_get_all":
     case "channels_get_by_server":
-    case "channels_get_by_id":
+    case "channels_get_by_id": {
       return "channels.read";
-    case "channels_delete":
+    }
+    case "channels_delete": {
       return "channels.delete";
-    case "channels_move":
+    }
+    case "channels_move": {
       return "channels.move";
-    case "messages_update":
+    }
+    case "messages_update": {
       return "messages.update";
-    case "messages_create":
+    }
+    case "messages_create": {
       return "messages.create";
+    }
     case "messages_get_all":
     case "messages_get_by_server":
     case "messages_get_by_text_channel":
-    case "messages_get_by_id":
+    case "messages_get_by_id": {
       return "messages.read";
-    case "messages_delete":
+    }
+    case "messages_delete": {
       return "messages.delete";
+    }
   }
 }
 
 export function updateCapability(update: WsUpdate): ClientWsCapabilityId {
   switch (update.type) {
     case "user_upserted":
-    case "user_deleted":
+    case "user_deleted": {
       return "users.events";
+    }
     case "membership_upserted":
-    case "membership_deleted":
+    case "membership_deleted": {
       return "memberships.events";
+    }
     case "server_upserted":
-    case "server_deleted":
+    case "server_deleted": {
       return "servers.events";
+    }
     case "channel_upserted":
-    case "channel_deleted":
+    case "channel_deleted": {
       return "channels.events";
-    case "message_upserted":
+    }
+    case "message_upserted": {
       return "messages.events";
+    }
   }
 }
 
@@ -296,8 +327,8 @@ function compareVersions(a: string, b: string): number {
 
 export function describeCapabilityIssue(
   capability: string,
-  offeredVersions: ReadonlyArray<string>,
-  supportedVersions: ReadonlyArray<string> | null
+  offeredVersions: readonly string[],
+  supportedVersions: readonly string[] | null
 ): CapabilityIssue {
   let reason: CapabilityIssue["reason"] = "incompatible";
   let explanation = "incompatible versions";

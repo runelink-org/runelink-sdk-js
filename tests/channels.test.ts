@@ -9,7 +9,7 @@ import {
 } from "../src/index.ts";
 import { parseVariant } from "./schema-assertions.ts";
 
-function ok(schema: Schema.ConstraintDecoder<unknown, never>, value: unknown) {
+function ok(schema: Schema.ConstraintDecoder<unknown>, value: unknown) {
   return Exit.isSuccess(Schema.decodeUnknownExit(schema)(value));
 }
 

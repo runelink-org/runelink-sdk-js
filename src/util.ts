@@ -4,10 +4,10 @@ export function normalizeUsername(input: string): string {
   return input
     .trim()
     .toLowerCase()
-    .replace(/[\s_.-]+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .replaceAll(/[\s_.-]+/g, "-")
+    .replaceAll(/[^a-z0-9-]/g, "")
+    .replaceAll(/-+/g, "-")
+    .replaceAll(/^-+|-+$/g, "");
 }
 
 export function normalizeHostInput(input: string): string {
