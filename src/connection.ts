@@ -20,13 +20,15 @@ import * as Socket from "effect/socket/Socket";
 import {
   CLIENT_WS_SUPPORTED_CAPABILITIES,
   NEGOTIATION_VERSION,
-  type CapabilityIssue,
-  type NegotiatedCapabilities,
-  type SupportedCapabilities,
   SupportedCapabilitiesSchema,
   describeCapabilityIssue,
   requestCapability,
   updateCapability,
+} from "./capability.js";
+import type {
+  CapabilityIssue,
+  NegotiatedCapabilities,
+  SupportedCapabilities,
 } from "./capability.js";
 import {
   RunelinkAuthError,
@@ -40,18 +42,15 @@ import {
   RunelinkNotFoundError,
   RunelinkProtocolError,
   RunelinkUnsupportedCapabilityError,
-  type RunelinkConnectError,
-  type RunelinkConnectionIssue,
-  type RunelinkHostError,
-  type RunelinkRequestFailure,
+} from "./errors.js";
+import type {
+  RunelinkConnectError,
+  RunelinkConnectionIssue,
+  RunelinkHostError,
+  RunelinkRequestFailure,
 } from "./errors.js";
 import {
   REPLY_TYPE_BY_REQUEST_TYPE,
-  type ReplyFor,
-  type WsError,
-  type WsReply,
-  type WsRequest,
-  type WsUpdate,
   WsErrorEnvelopeSchema,
   WsHelloEnvelopeSchema,
   WsReplyEnvelopeSchema,
@@ -59,9 +58,16 @@ import {
   WsUpdateEnvelopeSchema,
   WsWelcomeEnvelopeSchema,
 } from "./protocol.js";
+import type {
+  ReplyFor,
+  WsError,
+  WsReply,
+  WsRequest,
+  WsUpdate,
+} from "./protocol.js";
 import { getWsUrl } from "./util.js";
 
-const DEFAULT_RECONNECT_INITIAL_DELAY_MS = 1_000;
+const DEFAULT_RECONNECT_INITIAL_DELAY_MS = 1000;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30_000;
 const DEFAULT_RECONNECT_BACKOFF_MULTIPLIER = 2;
 const DEFAULT_RECONNECT_JITTER_RATIO = 0.2;
@@ -171,7 +177,7 @@ export class RunelinkConnection extends Context.Service<
      * negotiation completes.
      */
     readonly capabilityIssues: Effect.Effect<
-      Option.Option<ReadonlyArray<CapabilityIssue>>
+      Option.Option<readonly CapabilityIssue[]>
     >;
   }
 >()("@runelink/sdk/RunelinkConnection") {}
@@ -268,7 +274,7 @@ function redactUrl(url: string): string {
   return Option.match(shown, {
     onNone: () => "(redacted URL)",
     onSome: (parsed) => {
-      const href = parsed.href;
+      const { href } = parsed;
       parsed.username = "";
       parsed.password = "";
       parsed.search = "";
@@ -295,12 +301,12 @@ function describeCause(cause: unknown): string {
 }
 
 // An unknown cause may throw, such as from a getter
-const redactCause = Option.liftThrowable(function (
-  cause: unknown
-): Error | undefined {
-  const text = describeCause(cause);
-  return text.length > 0 ? new Error(text) : undefined;
-});
+const redactCause = Option.liftThrowable(
+  (cause: unknown): Error | undefined => {
+    const text = describeCause(cause);
+    return text.length > 0 ? new Error(text) : undefined;
+  }
+);
 
 function connectionError(
   error: Socket.SocketError,
@@ -337,22 +343,28 @@ function hostError(
 ): RunelinkHostError | RunelinkUnsupportedCapabilityError {
   const fields = { hostMessage: error.message, details: error.details };
   switch (error.code) {
-    case "auth_error":
+    case "auth_error": {
       return new RunelinkAuthError(fields);
-    case "bad_request":
+    }
+    case "bad_request": {
       return new RunelinkBadRequestError(fields);
-    case "not_found":
+    }
+    case "not_found": {
       return new RunelinkNotFoundError(fields);
-    case "conflict":
+    }
+    case "conflict": {
       return new RunelinkConflictError(fields);
-    case "unsupported_capability":
+    }
+    case "unsupported_capability": {
       return new RunelinkUnsupportedCapabilityError({
         host,
         capability,
         issue: error.message,
       });
-    default:
+    }
+    default: {
       return new RunelinkInternalError({ code: error.code, ...fields });
+    }
   }
 }
 
@@ -637,7 +649,7 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
       });
       settleReady(Exit.void);
       // The frames that arrived with the welcome are the first batch
-      let batch: ReadonlyArray<string | Uint8Array> = frames;
+      let batch: readonly (string | Uint8Array)[] = frames;
       while (true) {
         for (const frame of batch) yield* handleFrame(active, frame);
         batch = yield* reader.pull.pipe(Effect.mapError(closed));
@@ -695,8 +707,9 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
       Effect.map((waiting) => {
         release();
         if (waiting === "redial") return true;
-        if (waiting !== undefined)
+        if (waiting !== undefined) {
           Deferred.doneUnsafe(waiting, Exit.fail(error));
+        }
         return false;
       }),
       Effect.uninterruptible
@@ -751,13 +764,17 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
         );
         dialing = false;
         unreleased.set(released, end.error);
-        return yield* afterAttempt(end, () => release(end.error));
+        return yield* afterAttempt(end, () => {
+          release(end.error);
+        });
       }).pipe(
         // `disconnect` releases interrupted attempts after publishing its status
         Effect.onExit((exit) =>
           Exit.hasInterrupts(exit)
             ? Effect.void
-            : Effect.sync(() => release(new RunelinkDisconnectedError()))
+            : Effect.sync(() => {
+                release(new RunelinkDisconnectedError());
+              })
         )
       );
     }
@@ -852,7 +869,7 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
       type: "request",
       data: { request_id: requestId, request: input },
     }).pipe(Effect.mapError(invalid));
-    const request = envelope.data.request;
+    const { request } = envelope.data;
     // Serialized before connecting, so later changes to the input are not sent
     const text = yield* encodeJson(envelope).pipe(Effect.mapError(invalid));
     if (options?.connect !== false) {

@@ -12,8 +12,8 @@ import {
   describeCapabilityIssue,
   RunelinkConnection,
   WsRequestEnvelopeSchema,
-  type RunelinkConnectionIssue,
 } from "../src/index.ts";
+import type { RunelinkConnectionIssue } from "../src/index.ts";
 
 const v1 = "2026.10.16",
   v2 = "2026.10.17",
@@ -27,11 +27,12 @@ it("capability diagnostics distinguish missing, legacy, age, mixed, and empty of
     [[v2], [v1, v3], "incompatible"],
     [[], [v1], "incompatible"],
     [["2026.10.16.10"], ["2026.10.16.2"], "outdated-host"],
-  ] as const)
+  ] as const) {
     assert.equal(
       describeCapabilityIssue("messages.read", offered, supported).reason,
       reason
     );
+  }
 });
 
 // Exercise real connection lifecycle with controlled wire messages: the fake
@@ -68,8 +69,9 @@ class FakeSocket extends EventTarget {
       message === null ||
       !("type" in message) ||
       message.type !== "hello"
-    )
+    ) {
       return;
+    }
     const data = JSON.stringify({ type: "welcome", data: this.welcome });
     queueMicrotask(() =>
       this.dispatchEvent(Object.assign(new Event("message"), { data }))
@@ -150,7 +152,7 @@ it.effect(
               issues[0].reason,
               rejected === undefined
                 ? "unknown"
-                : rejected["messages.read"].length
+                : rejected["messages.read"].length > 0
                   ? "outdated-host"
                   : "missing"
             );
@@ -287,13 +289,13 @@ it.effect(
                   : undefined,
               cause
             );
-            if (url === secretUrl)
+            if (url === secretUrl) {
               assert.ok(
                 !inspect(error, { depth: Infinity }).includes("secret-token")
               );
-            else {
+            } else {
               assert.ok(Socket.isSocketError(error.cause));
-              const reason = error.cause.reason;
+              const { reason } = error.cause;
               assert.ok("cause" in reason && reason.cause instanceof Event);
               assert.equal(reason.cause.type, "error");
             }
@@ -400,11 +402,12 @@ it.effect("error replies fail with the tagged error for their code", () =>
       socket.error(id, { code, message: `Host says ${code}`, details: null });
       const error = yield* Effect.flip(Fiber.join(fiber));
       assert.equal(error._tag, tag);
-      if (error._tag === "RunelinkInternalError")
+      if (error._tag === "RunelinkInternalError") {
         assert.equal(error.code, code);
-      if (error._tag === "RunelinkUnsupportedCapabilityError")
+      }
+      if (error._tag === "RunelinkUnsupportedCapabilityError") {
         assert.equal(error.capability, "ping");
-      else assert.equal(error.message, `Host says ${code}`);
+      } else assert.equal(error.message, `Host says ${code}`);
     }
   })
 );
@@ -433,7 +436,7 @@ it.effect(
       const error = yield* Effect.flip(conn.connect);
       assert.equal(error._tag, "RunelinkDisconnectedError");
     }),
-  { timeout: 1_000 }
+  { timeout: 1000 }
 );
 it.effect(
   "a consumer forked with startImmediately receives the next update",
@@ -459,8 +462,8 @@ it.effect(
         Stream.runForEach((update) => Deferred.succeed(first, update)),
         Effect.forkScoped({ startImmediately: true })
       );
-      const id = "00000000-0000-4000-8000-000000000001",
-        at = "2026-11-26T00:00:00Z";
+      const at = "2026-11-26T00:00:00Z",
+        id = "00000000-0000-4000-8000-000000000001";
       const data = {
         id,
         text_channel_id: id,
@@ -483,5 +486,5 @@ it.effect(
       assert.equal(update.type, "message_upserted");
       assert.equal(update.data.body, "hi");
     }),
-  { timeout: 1_000 }
+  { timeout: 1000 }
 );

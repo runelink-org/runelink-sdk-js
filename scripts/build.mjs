@@ -29,7 +29,7 @@ async function buildPackage() {
       '{"type":"commonjs"}\n'
     );
     await Promise.all(
-      ["esm", "cjs"].map(function (format) {
+      ["esm", "cjs"].map((format) => {
         return build({
           absWorkingDir: root,
           entryPoints: ["src/index.ts"],
@@ -82,7 +82,7 @@ if (watchMode) {
   }
 
   watch(new URL("../src", import.meta.url), { recursive: true }, scheduleBuild);
-  watch(root, function (_event, filename) {
+  watch(root, (_event, filename) => {
     if (filename === "tsconfig.json") scheduleBuild();
   });
   await rebuild();

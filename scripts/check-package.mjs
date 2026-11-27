@@ -44,7 +44,7 @@ async function run(command, args, cwd) {
 
 async function checkPackage(directory) {
   await run(process.execPath, ["scripts/build.mjs"], root);
-  // npm 11 prints an array; npm 12 keys the result by package name.
+  // Npm 11 prints an array; npm 12 keys the result by package name.
   const [pack] = Object.values(
     JSON.parse(
       await run(
@@ -54,13 +54,13 @@ async function checkPackage(directory) {
       )
     )
   );
-  const files = pack.files.map(function (file) {
+  const files = pack.files.map((file) => {
     return file.path;
   });
-  const unexpected = files.filter(function (file) {
+  const unexpected = files.filter((file) => {
     return !allowedFiles.has(file) && !file.startsWith("dist/");
   });
-  const missing = requiredFiles.filter(function (file) {
+  const missing = requiredFiles.filter((file) => {
     return !files.includes(file);
   });
   if (unexpected.length > 0 || missing.length > 0) {
