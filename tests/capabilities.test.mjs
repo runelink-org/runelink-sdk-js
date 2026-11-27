@@ -122,6 +122,27 @@ test('requests match replies, ignore late replies, and fail when the socket clos
     assert.equal(error.message, 'WebSocket closed (4000): bye');
   }));
 });
+test('requests that may not connect fail instead of opening a socket', async () => {
+  await run(Effect.gen(function* () {
+    const conn = yield* connection(base);
+    const ping = conn.request({ type: 'ping' }, { connect: false });
+    const before = FakeSocket.last;
+    assert.equal((yield* Effect.flip(ping))._tag, 'RunelinkDisconnectedError');
+    assert.equal(FakeSocket.last, before);
+
+    yield* conn.connect;
+    const socket = FakeSocket.last;
+    const fiber = yield* Effect.forkScoped(ping, { startImmediately: true });
+    yield* Effect.yieldNow;
+    socket.reply(socket.requests.at(-1), { type: 'pong' });
+    assert.equal((yield* Fiber.join(fiber)).type, 'pong');
+
+    socket.close();
+    yield* conn.statusChanges.pipe(Stream.takeUntil((status) => status === 'disconnected'), Stream.runDrain);
+    assert.equal((yield* Effect.flip(ping))._tag, 'RunelinkDisconnectedError');
+    assert.equal(FakeSocket.last, socket);
+  }));
+});
 test('error replies fail with the tagged error for their code', async () => {
   await run(Effect.gen(function* () {
     const conn = yield* connection(base);

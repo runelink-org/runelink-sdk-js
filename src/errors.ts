@@ -133,7 +133,10 @@ export class RunelinkConnectionError extends Schema.TaggedError<RunelinkConnecti
   }
 }
 
-/** `disconnect` cancelled the connection attempt or request. */
+/**
+ * `disconnect` cancelled the connection attempt or request, or there was no
+ * connection to send the request on.
+ */
 export class RunelinkDisconnectedError extends Schema.TaggedError<RunelinkDisconnectedError>()(
   "RunelinkDisconnectedError",
   {}
