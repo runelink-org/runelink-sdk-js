@@ -7,12 +7,15 @@ export const Uuid = Schema.String.check(Schema.isUUID());
 // stay strings to preserve the host's full precision.
 export const Timestamp = Schema.String.check(
   Schema.isPattern(
+    // oxlint-disable-next-line eslint/require-unicode-regexp -- Effect emits a JSON Schema pattern for Unicode-flagged regexes, which changes this public schema.
     /^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/
   )
 );
 
 /** A nullable field that decodes to `null` when the host omits it. */
-export function NullDefault<S extends Schema.Top>(schema: S) {
+export function NullDefault<S extends Schema.Top>(
+  schema: S
+): Schema.withDecodingDefault<Schema.NullOr<S>> {
   return Schema.NullOr(schema).pipe(
     Schema.withDecodingDefault(Effect.succeed(null))
   );
@@ -24,7 +27,10 @@ export function NullDefault<S extends Schema.Top>(schema: S) {
  */
 export function ExactStruct<const Fields extends Schema.Struct.Fields>(
   fields: Fields
-) {
+): Schema.compose<
+  Schema.Struct<Fields>,
+  Schema.$Record<Schema.String, Schema.Unknown>
+> {
   return Schema.Record(Schema.String, Schema.Unknown)
     .check(
       Schema.makeFilter(

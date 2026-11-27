@@ -123,6 +123,8 @@ export class RunelinkUnsupportedCapabilityError extends Schema.TaggedError<Runel
 export class RunelinkConnectionError extends Schema.TaggedError<RunelinkConnectionError>()(
   "RunelinkConnectionError",
   {
+    // Keep the exported error constructor and decoder accepting non-finite codes from direct callers.
+    // @effect-diagnostics-next-line schemaNumber:off
     code: Schema.Number,
     reason: Schema.String,
     // What failed without a close frame, or for a URL with secrets, only its

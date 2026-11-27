@@ -29,8 +29,8 @@ async function buildPackage() {
       '{"type":"commonjs"}\n'
     );
     await Promise.all(
-      ["esm", "cjs"].map((format) => {
-        return build({
+      ["esm", "cjs"].map((format) =>
+        build({
           absWorkingDir: root,
           entryPoints: ["src/index.ts"],
           outfile: path.join(
@@ -43,8 +43,8 @@ async function buildPackage() {
           target: "es2022",
           format,
           minify: true,
-        });
-      })
+        })
+      )
     );
     // Keep the last working package available until the new build succeeds.
     const dist = path.join(root, "dist");
@@ -56,8 +56,24 @@ async function buildPackage() {
   }
 }
 
-if (watchMode) {
+/** @param {unknown} error */
+function reportBuildError(error) {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "stdout" in error &&
+    typeof error.stdout === "string" &&
+    error.stdout.length > 0
+  ) {
+    console.error(error.stdout);
+    return;
+  }
+  console.error(error);
+}
+
+async function watchPackage() {
   let timer;
+  // Finish the staged build before replacing its output again.
   let building = false;
   let pending = false;
 
@@ -67,11 +83,8 @@ if (watchMode) {
     building = true;
     while (pending) {
       pending = false;
-      try {
-        await buildPackage();
-      } catch (error) {
-        console.error(error.stdout || error);
-      }
+      // oxlint-disable-next-line eslint/no-await-in-loop -- Finish the current build before handling changes queued during it.
+      await buildPackage().catch(reportBuildError);
     }
     building = false;
   }
@@ -86,11 +99,15 @@ if (watchMode) {
     if (filename === "tsconfig.json") scheduleBuild();
   });
   await rebuild();
+}
+
+if (watchMode === true) {
+  await watchPackage();
 } else {
   try {
     await buildPackage();
   } catch (error) {
-    console.error(error.stdout || error);
+    reportBuildError(error);
     process.exitCode = 1;
   }
 }

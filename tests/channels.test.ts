@@ -1,17 +1,11 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import * as Exit from "effect/Exit";
-import * as Schema from "effect/Schema";
 import {
   ServerChannelSchema,
   WsReplySchema,
   WsUpdateSchema,
 } from "../src/index.ts";
-import { parseVariant } from "./schema-assertions.ts";
-
-function ok(schema: Schema.ConstraintDecoder<unknown>, value: unknown) {
-  return Exit.isSuccess(Schema.decodeUnknownExit(schema)(value));
-}
+import { parseVariant, ok } from "./schema-assertions.ts";
 
 const category = {
   id: "00000000-0000-4000-8000-000000000001",

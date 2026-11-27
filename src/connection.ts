@@ -77,6 +77,8 @@ const PROTOCOL_ERROR_CLOSE_CODE = 1002;
 // Close code browsers report for sockets that fail without a close frame
 const ABNORMAL_CLOSE_CODE = 1006;
 
+const isRunelinkProtocolError = Schema.is(RunelinkProtocolError);
+
 const decodeRequestEnvelope = Schema.decodeUnknownEffect(
   WsRequestEnvelopeSchema
 );
@@ -399,6 +401,8 @@ function isValidWelcome(
 }
 
 /** Creates a connection that disconnects when its scope closes. */
+// Callers supply the Effect socket constructor so the SDK can run in browsers and Node.
+// @effect-diagnostics-next-line apiStabilityLeak:off
 export const make = Effect.fn("RunelinkConnection.make")(function* (
   options: Options
 ) {
@@ -414,9 +418,9 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
   // The supervisor's handle closes in the connection's own finalizer, after
   // `disconnect`, whatever the outer scope's finalizer strategy
   const loopScope = yield* Scope.make();
-  const loop = yield* FiberHandle.make<void>().pipe(Scope.provide(loopScope));
+  const loop = yield* FiberHandle.make().pipe(Scope.provide(loopScope));
   const turns = yield* Semaphore.make(1);
-  const closed = yield* Deferred.make<void>();
+  const closed = yield* Deferred.make<undefined>();
 
   // The negotiated session, if any
   let session: Session | undefined;
@@ -425,7 +429,7 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
   let looping = false;
   // Connecting outside of a dial completes this, which skips the next reconnect
   // delay. Connecting during a dial joins it, as the old SDK did.
-  let wake = Deferred.makeUnsafe<void>();
+  let wake = Deferred.makeUnsafe<undefined>();
   let dialing = false;
   const primaryUrl = options.url ?? getWsUrl(options.host, true);
   // Host connections may fall back to this if the secure socket never opens
@@ -485,12 +489,13 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
     frame: string | Uint8Array
   ) {
     if (typeof frame !== "string") {
-      return yield* PubSub.publish(
+      yield* PubSub.publish(
         issues,
         new RunelinkProtocolError({
           reason: "Unsupported websocket message type: binary",
         })
       );
+      return;
     }
     const decoded = yield* Effect.result(decodeIncoming(frame));
     if (Result.isFailure(decoded)) {
@@ -510,18 +515,18 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
     const envelope = decoded.success;
     if (envelope.type === "update") {
       const capability = updateCapability(envelope.data.update);
-      if (
-        active.negotiated[capability] !==
-        CLIENT_WS_SUPPORTED_CAPABILITIES[capability][0]
-      ) {
-        return yield* PubSub.publish(
-          issues,
-          new RunelinkProtocolError({
-            reason: `Received update for unnegotiated capability ${capability}`,
-          })
-        );
-      }
-      return yield* PubSub.publish(updates, envelope.data.update);
+      const negotiated =
+        active.negotiated[capability] ===
+        CLIENT_WS_SUPPORTED_CAPABILITIES[capability][0];
+      yield* negotiated
+        ? PubSub.publish(updates, envelope.data.update)
+        : PubSub.publish(
+            issues,
+            new RunelinkProtocolError({
+              reason: `Received update for unnegotiated capability ${capability}`,
+            })
+          );
+      return;
     }
     const requestId = envelope.data.request_id;
     const exit =
@@ -536,6 +541,13 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
         })
       );
     }
+  });
+
+  const attemptClosed = (error: Socket.SocketError): AttemptEnd => ({
+    error: connectionError(error, redacted),
+  });
+  const incompatibleHost = (reason: string): AttemptEnd => ({
+    error: new RunelinkIncompatibleHostError({ host, reason }),
   });
 
   // One socket, from opening through negotiation until it closes
@@ -553,9 +565,7 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
       // Effect's socket can miss `open` if it yields between checking
       // `readyState` and adding its listener
       Effect.provideService(Scheduler.PreventSchedulerYield, true),
-      Effect.mapError((error): AttemptEnd => ({
-        error: connectionError(error, redacted),
-      })),
+      Effect.mapError(attemptClosed),
       // A browser may refuse the `ws` fallback when constructing the socket,
       // such as on an `https` page, which is a failed attempt rather than a
       // reason to stop
@@ -569,19 +579,13 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
     );
     openedUrl ??= url;
     const writer = yield* socket.writer;
-    const closed = (error: Socket.SocketError): AttemptEnd => ({
-      error: connectionError(error, redacted),
-    });
-    const incompatible = (reason: string): AttemptEnd => ({
-      error: new RunelinkIncompatibleHostError({ host, reason }),
-    });
     // A 1002 only means an incompatible host during negotiation. Later, it is
     // an ordinary protocol error that reconnecting can recover from.
     const negotiationClosed = (error: Socket.SocketError): AttemptEnd =>
       error.reason._tag === "SocketCloseError" &&
       error.reason.code === PROTOCOL_ERROR_CLOSE_CODE
-        ? incompatible(error.reason.closeReason?.trim() ?? "")
-        : closed(error);
+        ? incompatibleHost(error.reason.closeReason?.trim() ?? "")
+        : attemptClosed(error);
     // Tells the host why this client is closing and fails once the socket
     // closes, as the old SDK did before dialing again
     const closeWith = (reason: string) =>
@@ -600,7 +604,7 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
         capabilities: config.capabilities,
       },
     }).pipe(Effect.orDie);
-    yield* writer.write(hello).pipe(Effect.mapError(closed));
+    yield* writer.write(hello).pipe(Effect.mapError(attemptClosed));
     const [welcome, ...frames] = yield* reader.pull.pipe(
       Effect.mapError(negotiationClosed),
       Effect.timeoutOrElse({
@@ -626,7 +630,7 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
         closeWith("Invalid capability negotiation response")
       );
       return yield* Effect.fail(
-        incompatible("Invalid capability negotiation response")
+        incompatibleHost("Invalid capability negotiation response")
       );
     }
 
@@ -643,16 +647,18 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
       reconnectAttempt = 0;
       // Installing the session as `connected` is published, so subscribers
       // see both together
-      yield* SubscriptionRef.modify(status, (): [void, Status] => {
+      yield* SubscriptionRef.update(status, (): Status => {
         session = active;
-        return [undefined, "connected"];
+        return "connected";
       });
       settleReady(Exit.void);
       // The frames that arrived with the welcome are the first batch
       let batch: readonly (string | Uint8Array)[] = frames;
       while (true) {
-        for (const frame of batch) yield* handleFrame(active, frame);
-        batch = yield* reader.pull.pipe(Effect.mapError(closed));
+        for (const frame of batch) {
+          yield* handleFrame(active, frame);
+        }
+        batch = yield* reader.pull.pipe(Effect.mapError(attemptClosed));
       }
     }).pipe(
       Effect.ensuring(
@@ -681,21 +687,19 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
     const delay = Math.round(
       minDelay + (yield* Random.next) * (baseDelay + jitter - minDelay)
     );
-    yield* Effect.sleep(delay).pipe(Effect.raceFirst(Deferred.await(wake)));
+    yield* Deferred.await(wake).pipe(
+      Effect.timeoutOrElse({ duration: delay, orElse: () => Effect.void })
+    );
   });
 
   // Reports `disconnected` and, in the same step, either keeps the supervisor
   // for a caller that connected after the last attempt (returning true) or
   // retires it, so no caller or replacement supervisor can slip in between.
   // Waiters fail after the report, since failing resumes them inline.
-  const retire = (
-    error: RunelinkConnectError,
-    canRedial: boolean,
-    release: () => void
-  ) =>
+  const retire = (error: RunelinkConnectError, release?: () => void) =>
     SubscriptionRef.modify(status, (): [typeof ready | "redial", Status] => {
       reconnectAttempt = 0;
-      if (canRedial && Deferred.isDoneUnsafe(wake)) {
+      if (release !== undefined && Deferred.isDoneUnsafe(wake)) {
         return ["redial", "disconnected"];
       }
       looping = false;
@@ -705,7 +709,7 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
       return [waiting, "disconnected"];
     }).pipe(
       Effect.map((waiting) => {
-        release();
+        release?.();
         if (waiting === "redial") return true;
         if (waiting !== undefined) {
           Deferred.doneUnsafe(waiting, Exit.fail(error));
@@ -740,10 +744,39 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
       return true;
     }
     // A call that failed with this socket may have already connected again
-    if (!(yield* retire(end.error, true, release))) return false;
+    if (!(yield* retire(end.error, release))) return false;
     yield* SubscriptionRef.set(status, "connecting");
     return true;
   });
+
+  function releaseAttempt(released: Release, error: RunelinkConnectError) {
+    unreleased.delete(released);
+    Deferred.doneUnsafe(released, Exit.fail(error));
+  }
+
+  // The supervisor owns the attempt without adding a span for each reconnect.
+  const superviseAttempt = Effect.fnUntraced(
+    function* (released: Release) {
+      const end = yield* runAttempt(activeUrl, released).pipe(
+        Effect.scoped,
+        Effect.flip
+      );
+      dialing = false;
+      unreleased.set(released, end.error);
+      return yield* afterAttempt(end, () => {
+        releaseAttempt(released, end.error);
+      });
+    },
+    (attempt, released) =>
+      // `disconnect` releases interrupted attempts after publishing its status
+      Effect.onExit(attempt, (exit) =>
+        Exit.hasInterrupts(exit)
+          ? Effect.void
+          : Effect.sync(() => {
+              releaseAttempt(released, new RunelinkDisconnectedError());
+            })
+      )
+  );
 
   // The sole owner of reconnects, running until it gives up or is interrupted
   const supervise = Effect.gen(function* () {
@@ -754,37 +787,13 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
       dialing = true;
       const released: Release = Deferred.makeUnsafe();
       unreleased.set(released, undefined);
-      const release = (error: RunelinkConnectError) => {
-        unreleased.delete(released);
-        Deferred.doneUnsafe(released, Exit.fail(error));
-      };
-      again = yield* Effect.gen(function* () {
-        const end = yield* Effect.flip(
-          Effect.scoped(runAttempt(activeUrl, released))
-        );
-        dialing = false;
-        unreleased.set(released, end.error);
-        return yield* afterAttempt(end, () => {
-          release(end.error);
-        });
-      }).pipe(
-        // `disconnect` releases interrupted attempts after publishing its status
-        Effect.onExit((exit) =>
-          Exit.hasInterrupts(exit)
-            ? Effect.void
-            : Effect.sync(() => {
-                release(new RunelinkDisconnectedError());
-              })
-        )
-      );
+      again = yield* superviseAttempt(released);
     }
   }).pipe(
     // A defect, such as the socket constructor rejecting the URL, also ends it
     Effect.catchDefect((cause) => {
       const error = abnormalClose(cause, redacted);
-      return PubSub.publish(issues, error).pipe(
-        Effect.andThen(retire(error, false, () => {}))
-      );
+      return PubSub.publish(issues, error).pipe(Effect.andThen(retire(error)));
     })
   );
 
@@ -796,10 +805,12 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
         if (Deferred.isDoneUnsafe(closed)) {
           return Effect.fail(new RunelinkDisconnectedError());
         }
-        if (session !== undefined) return Effect.succeed(undefined);
+        if (session !== undefined) return Effect.undefined;
         if (ready === undefined) {
           ready = Deferred.makeUnsafe();
-          if (looping && !dialing) Deferred.doneUnsafe(wake, Exit.void);
+          if (looping && !dialing) {
+            Deferred.doneUnsafe(wake, Exit.succeed(undefined));
+          }
         }
         const waiting = ready;
         if (looping) return Effect.succeed(waiting);
@@ -854,16 +865,21 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
 
   const sendRequest = Effect.fn("RunelinkConnection.request")(function* (
     input: WsRequest,
-    options?: RequestOptions
+    requestOptions?: RequestOptions
   ): Effect.fn.Return<WsReply, RunelinkRequestFailure> {
     // A request that does not connect stays on the socket connected when it
     // starts
     const initial = session;
-    const invalid = (cause: Schema.SchemaError) =>
-      new RunelinkInvalidRequestError({
-        requestType: String(input?.type),
+    const invalid = (cause: Schema.SchemaError) => {
+      // Validation also accepts runtime calls from untyped consumers.
+      const requestType: unknown = input?.type;
+      return new RunelinkInvalidRequestError({
+        requestType: String(requestType),
         cause,
       });
+    };
+    // Keep the platform randomUUID contract without adding a SecureRandom service requirement.
+    // @effect-diagnostics-next-line cryptoRandomUUIDInEffect:off
     const requestId = crypto.randomUUID();
     const envelope = yield* decodeRequestEnvelope({
       type: "request",
@@ -872,7 +888,7 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
     const { request } = envelope.data;
     // Serialized before connecting, so later changes to the input are not sent
     const text = yield* encodeJson(envelope).pipe(Effect.mapError(invalid));
-    if (options?.connect !== false) {
+    if (requestOptions?.connect !== false) {
       yield* connect;
     } else if (session !== initial || Deferred.isDoneUnsafe(closed)) {
       return yield* new RunelinkDisconnectedError();
@@ -881,7 +897,7 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
     if (active === undefined) return yield* new RunelinkDisconnectedError();
 
     const capability = requestCapability(request);
-    const version = CLIENT_WS_SUPPORTED_CAPABILITIES[capability][0];
+    const [version] = CLIENT_WS_SUPPORTED_CAPABILITIES[capability];
     if (
       version === undefined ||
       !config.capabilities[capability]?.includes(version)
@@ -902,7 +918,7 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
     const deferred = yield* Deferred.make<WsReply, ReplyError>();
     const replied = Deferred.await(deferred).pipe(
       Effect.mapError((error) =>
-        error instanceof RunelinkProtocolError
+        isRunelinkProtocolError(error)
           ? error
           : hostError(error, host, capability)
       )
@@ -947,6 +963,7 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
     connect,
     disconnect,
     // The reply type was checked against the request type above.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- TypeScript cannot relate the checked reply discriminator to this generic request.
     request: sendRequest as RunelinkConnection["Service"]["request"],
     status: SubscriptionRef.get(status),
     statusChanges: SubscriptionRef.changes(status).pipe(Stream.changes),
@@ -962,5 +979,9 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
   });
 });
 
-export const layer = (options: Options) =>
+// The layer deliberately has the same socket requirement as make.
+// @effect-diagnostics-next-line apiStabilityLeak:off
+export const layer = (
+  options: Options
+): Layer.Layer<RunelinkConnection, never, Socket.WebSocketConstructor> =>
   Layer.effect(RunelinkConnection, make(options));

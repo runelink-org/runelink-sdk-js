@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import * as Exit from "effect/Exit";
-import * as Schema from "effect/Schema";
 import {
   NewMessageSchema,
   NewServerChannelSchema,
@@ -11,17 +9,7 @@ import {
   WsReplySchema,
   WsUpdateSchema,
 } from "../src/index.ts";
-import { parseVariant } from "./schema-assertions.ts";
-
-function parse<S extends Schema.ConstraintDecoder<unknown>>(
-  schema: S,
-  value: unknown
-) {
-  return Schema.decodeUnknownSync(schema)(value);
-}
-function ok(schema: Schema.ConstraintDecoder<unknown>, value: unknown) {
-  return Exit.isSuccess(Schema.decodeUnknownExit(schema)(value));
-}
+import { parseVariant, parse, ok, roundTripJson } from "./schema-assertions.ts";
 
 const id = "00000000-0000-4000-8000-000000000001";
 const timestamp = "2026-11-13T00:00:00.123456Z";
@@ -53,7 +41,7 @@ it("creation and patches preserve missing, null, and object metadata", () => {
     for (const parsed of [message, channel]) {
       assert.deepEqual(parsed.metadata, fields.metadata);
       assert.equal(
-        Object.hasOwn(JSON.parse(JSON.stringify(parsed)), "metadata"),
+        Object.hasOwn(roundTripJson(parsed), "metadata"),
         Object.hasOwn(fields, "metadata")
       );
     }

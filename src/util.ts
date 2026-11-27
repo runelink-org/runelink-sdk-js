@@ -4,18 +4,18 @@ export function normalizeUsername(input: string): string {
   return input
     .trim()
     .toLowerCase()
-    .replaceAll(/[\s_.-]+/g, "-")
-    .replaceAll(/[^a-z0-9-]/g, "")
-    .replaceAll(/-+/g, "-")
-    .replaceAll(/^-+|-+$/g, "");
+    .replaceAll(/[\s_.-]+/gu, "-")
+    .replaceAll(/[^a-z0-9-]/gu, "")
+    .replaceAll(/-+/gu, "-")
+    .replaceAll(/^-+|-+$/gu, "");
 }
 
 export function normalizeHostInput(input: string): string {
   return input
     .trim()
-    .replace(/^https?:\/\//i, "")
-    .replace(/\/+$/, "")
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/^https?:\/\//u, "")
+    .replace(/\/+$/u, "");
 }
 
 export function validateUsername(input: string): string {
@@ -45,7 +45,7 @@ export function validateHost(
     throw new Error("Host cannot be empty.");
   }
 
-  const colonMatches = normalized.match(/:/g) ?? [];
+  const colonMatches = normalized.match(/:/gu) ?? [];
   if (colonMatches.length > 1) {
     throw new Error("Host can include at most one port separator.");
   }
@@ -56,7 +56,7 @@ export function validateHost(
     throw new Error("Host cannot be empty.");
   }
 
-  if (!/^[a-z0-9.-]+$/.test(hostPart)) {
+  if (!/^[a-z0-9.-]+$/u.test(hostPart)) {
     throw new Error(
       "Host may only contain lowercase letters, digits, dots, hyphens, and an optional :port."
     );
@@ -67,7 +67,7 @@ export function validateHost(
       throw new Error("Host must not include a port here.");
     }
 
-    if (!/^\d+$/.test(portPart)) {
+    if (!/^\d+$/u.test(portPart)) {
       throw new Error("Host port must contain digits only.");
     }
   }
@@ -100,9 +100,9 @@ export function stripDefaultPort(host: string): string {
 
 export function hostFromIssuer(issuer: string): string {
   const host = issuer
-    .replace(/^http:\/\//, "")
-    .replace(/^https:\/\//, "")
-    .replace(/\/$/, "");
+    .replace(/^http:\/\//u, "")
+    .replace(/^https:\/\//u, "")
+    .replace(/\/$/u, "");
 
   return stripDefaultPort(host);
 }

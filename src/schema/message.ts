@@ -4,7 +4,7 @@ import { ExactStruct, NullDefault, Timestamp, Uuid } from "./primitives.js";
 import { UserRefSchema, UserSchema } from "./user.js";
 
 const messageFields = {
-  metadata: Schema.optional(Schema.NullOr(MetadataSchema)),
+  metadata: MetadataSchema.pipe(Schema.NullOr, Schema.optional),
   id: Uuid,
   text_channel_id: Uuid,
   author: Schema.NullOr(UserSchema),
@@ -34,10 +34,10 @@ export const MessageSchema = Schema.Union([
 ]);
 
 export const NewMessageSchema = Schema.Struct({
-  metadata: Schema.optional(Schema.NullOr(MetadataSchema)),
+  metadata: MetadataSchema.pipe(Schema.NullOr, Schema.optional),
   author: UserRefSchema,
   body: Schema.String,
-  reply_to: Schema.optional(Schema.NullOr(Uuid)),
+  reply_to: Uuid.pipe(Schema.NullOr, Schema.optional),
 });
 
 export type ActiveMessage = typeof ActiveMessageSchema.Type;
@@ -46,9 +46,9 @@ export type Message = typeof MessageSchema.Type;
 export type NewMessage = typeof NewMessageSchema.Type;
 
 export const MessageUpdateSchema = ExactStruct({
-  body: Schema.optional(Schema.NullOr(Schema.String)),
+  body: Schema.String.pipe(Schema.NullOr, Schema.optional),
   // Omitted preserves metadata; null clears it; an object replaces it.
-  metadata: Schema.optional(Schema.NullOr(MetadataSchema)),
+  metadata: MetadataSchema.pipe(Schema.NullOr, Schema.optional),
   expected_updated_at: Timestamp,
 });
 export type MessageUpdate = typeof MessageUpdateSchema.Type;

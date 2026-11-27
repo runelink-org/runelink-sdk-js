@@ -13,7 +13,7 @@ import {
   RunelinkConnection,
   WsRequestEnvelopeSchema,
 } from "../src/index.ts";
-import type { RunelinkConnectionIssue } from "../src/index.ts";
+import type { RunelinkConnectionIssue, WsUpdate } from "../src/index.ts";
 
 const v1 = "2026.10.16",
   v2 = "2026.10.17",
@@ -73,22 +73,24 @@ class FakeSocket extends EventTarget {
       return;
     }
     const data = JSON.stringify({ type: "welcome", data: this.welcome });
-    queueMicrotask(() =>
-      this.dispatchEvent(Object.assign(new Event("message"), { data }))
-    );
+    queueMicrotask(() => {
+      this.dispatchEvent(Object.assign(new Event("message"), { data }));
+    });
   }
   reply(requestId: string | undefined, reply: object) {
-    const data = JSON.stringify({
+    this.receive({
       type: "reply",
       data: { request_id: requestId, event_id: requestId, reply },
     });
-    this.dispatchEvent(Object.assign(new Event("message"), { data }));
   }
   error(requestId: string | undefined, error: object) {
-    const data = JSON.stringify({
+    this.receive({
       type: "error",
       data: { request_id: requestId, event_id: requestId, error },
     });
+  }
+  receive(frame: object) {
+    const data = JSON.stringify(frame);
     this.dispatchEvent(Object.assign(new Event("message"), { data }));
   }
   close(code = 1000, reason = "") {
@@ -129,11 +131,11 @@ it.effect(
   "new and legacy welcomes expose reasons, preserve names, and clear on disconnect",
   () =>
     Effect.gen(function* () {
-      for (const rejected of [
-        undefined,
-        { "messages.read": [v1] },
-        { "messages.read": [] },
-      ]) {
+      for (const [rejected, reason] of [
+        [undefined, "unknown"],
+        [{ "messages.read": [v1] }, "outdated-host"],
+        [{ "messages.read": [] }, "missing"],
+      ] as const) {
         yield* Effect.scoped(
           Effect.gen(function* () {
             const conn = yield* connection({
@@ -143,21 +145,16 @@ it.effect(
                 : { rejected_capabilities: rejected }),
             });
             yield* conn.connect;
-            const issues = Option.getOrThrow(yield* conn.capabilityIssues);
+            const available = yield* conn.capabilityIssues;
+            const issues = Option.getOrThrow(available);
             assert.deepEqual(
               issues.map((issue) => issue.capability),
               ["messages.read"]
             );
-            assert.equal(
-              issues[0].reason,
-              rejected === undefined
-                ? "unknown"
-                : rejected["messages.read"].length > 0
-                  ? "outdated-host"
-                  : "missing"
-            );
+            assert.equal(issues[0].reason, reason);
             yield* conn.disconnect;
-            assert.ok(Option.isNone(yield* conn.capabilityIssues));
+            const disconnectedIssues = yield* conn.capabilityIssues;
+            assert.ok(Option.isNone(disconnectedIssues));
           })
         );
       }
@@ -221,28 +218,31 @@ it.effect("errors report URLs without credentials, query, or fragment", () =>
     }
   })
 );
+function failingSocket(dialUrl: string) {
+  const socket = Object.assign(new EventTarget(), {
+    url: dialUrl,
+    readyState: 0,
+    close() {
+      // A socket that does not open has no state to close.
+    },
+    send() {
+      assert.fail("Socket failed to open");
+    },
+  });
+  queueMicrotask(() => {
+    socket.dispatchEvent(
+      Object.assign(new Event("error"), {
+        error: new Error(`connect ECONNREFUSED ${dialUrl}`),
+      })
+    );
+  });
+  return socket;
+}
+
 it.effect(
   "connection error causes leave out the socket and its message for URLs with secrets",
   () =>
     Effect.gen(function* () {
-      function failingSocket(dialUrl: string) {
-        const socket = Object.assign(new EventTarget(), {
-          url: dialUrl,
-          readyState: 0,
-          close() {},
-          send() {
-            assert.fail("Socket failed to open");
-          },
-        });
-        queueMicrotask(() =>
-          socket.dispatchEvent(
-            Object.assign(new Event("error"), {
-              error: new Error(`connect ECONNREFUSED ${dialUrl}`),
-            })
-          )
-        );
-        return socket;
-      }
       const secretUrl =
         "ws://bot:pw@localhost:7000/ws?access_token=secret-token#frag";
       for (const [url, makeSocket, cause] of [
@@ -257,6 +257,7 @@ it.effect(
         [
           secretUrl,
           () => {
+            // oxlint-disable-next-line eslint/no-throw-literal, typescript/only-throw-error -- Exercise an arbitrary third-party thrown value with a throwing getter.
             throw {
               get error() {
                 throw new Error("getter");
@@ -281,14 +282,12 @@ it.effect(
             );
             const error = yield* Effect.flip(conn.connect);
             assert.equal(error._tag, "RunelinkConnectionError");
-            assert.equal(
-              cause === undefined
-                ? error.cause
-                : error.cause instanceof Error
-                  ? error.cause.message
-                  : undefined,
-              cause
-            );
+            let actualCause = error.cause;
+            if (cause !== undefined) {
+              assert.ok(actualCause instanceof Error);
+              actualCause = actualCause.message;
+            }
+            assert.equal(actualCause, cause);
             if (url === secretUrl) {
               assert.ok(
                 !inspect(error, { depth: Infinity }).includes("secret-token")
@@ -325,14 +324,14 @@ it.effect(
       request = yield* pending;
       socket.reply(request.id, { type: "users_delete" });
       assert.equal(
-        (yield* Effect.flip(Fiber.join(request.fiber)))._tag,
+        (yield* request.fiber.pipe(Fiber.join, Effect.flip))._tag,
         "RunelinkProtocolError"
       );
 
       // A reply that does not decode still settles its request
       request = yield* pending;
       socket.reply(request.id, { type: "unknown_reply" });
-      const invalid = yield* Effect.flip(Fiber.join(request.fiber));
+      const invalid = yield* request.fiber.pipe(Fiber.join, Effect.flip);
       assert.equal(invalid._tag, "RunelinkProtocolError");
       assert.equal(invalid.reason, "Invalid message received");
 
@@ -348,7 +347,7 @@ it.effect(
 
       request = yield* pending;
       socket.close(4000, "bye");
-      const error = yield* Effect.flip(Fiber.join(request.fiber));
+      const error = yield* request.fiber.pipe(Fiber.join, Effect.flip);
       assert.equal(error.message, "WebSocket closed (4000): bye");
     })
 );
@@ -400,14 +399,16 @@ it.effect("error replies fail with the tagged error for their code", () =>
     ]) {
       const { fiber, id } = yield* pendingPing(conn, socket);
       socket.error(id, { code, message: `Host says ${code}`, details: null });
-      const error = yield* Effect.flip(Fiber.join(fiber));
+      const error = yield* fiber.pipe(Fiber.join, Effect.flip);
       assert.equal(error._tag, tag);
       if (error._tag === "RunelinkInternalError") {
         assert.equal(error.code, code);
       }
       if (error._tag === "RunelinkUnsupportedCapabilityError") {
         assert.equal(error.capability, "ping");
-      } else assert.equal(error.message, `Host says ${code}`);
+      } else {
+        assert.equal(error.message, `Host says ${code}`);
+      }
     }
   })
 );
@@ -425,7 +426,8 @@ it.effect("a socket constructor failure fails connect instead of hanging", () =>
       (yield* Effect.flip(conn.connect))._tag,
       "RunelinkConnectionError"
     );
-    assert.equal(yield* conn.status, "disconnected");
+    const status = yield* conn.status;
+    assert.equal(status, "disconnected");
   })
 );
 it.effect(
@@ -457,7 +459,7 @@ it.effect(
         )
       );
       yield* conn.connect;
-      const first = yield* Deferred.make<import("../src/index.ts").WsUpdate>();
+      const first = yield* Deferred.make<WsUpdate>();
       yield* conn.updates.pipe(
         Stream.runForEach((update) => Deferred.succeed(first, update)),
         Effect.forkScoped({ startImmediately: true })
@@ -474,14 +476,10 @@ it.effect(
         created_at: at,
         updated_at: at,
       };
-      FakeSocket.last.dispatchEvent(
-        Object.assign(new Event("message"), {
-          data: JSON.stringify({
-            type: "update",
-            data: { event_id: id, update: { type: "message_upserted", data } },
-          }),
-        })
-      );
+      FakeSocket.last.receive({
+        type: "update",
+        data: { event_id: id, update: { type: "message_upserted", data } },
+      });
       const update = yield* Deferred.await(first);
       assert.equal(update.type, "message_upserted");
       assert.equal(update.data.body, "hi");

@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import * as Exit from "effect/Exit";
-import * as Schema from "effect/Schema";
 import {
   CLIENT_WS_SUPPORTED_CAPABILITIES,
   FullServerMembershipSchema,
@@ -17,16 +15,7 @@ import {
   ServerUpdateSchema,
   UserSchema,
 } from "../src/index.ts";
-
-function parse<S extends Schema.ConstraintDecoder<unknown>>(
-  schema: S,
-  value: unknown
-) {
-  return Schema.decodeUnknownSync(schema)(value);
-}
-function ok(schema: Schema.ConstraintDecoder<unknown>, value: unknown) {
-  return Exit.isSuccess(Schema.decodeUnknownExit(schema)(value));
-}
+import { parse, ok, roundTripJson } from "./schema-assertions.ts";
 
 const timestamp = "2026-10-28T12:00:00.123456789Z";
 const user = {
@@ -139,7 +128,7 @@ for (const [name, schema, data] of [
     assert.equal("update_version" in parsed, false);
     assert.deepEqual(parsed, data);
     assert.deepEqual(parse(schema, parsed), data);
-    assert.deepEqual(parse(schema, JSON.parse(JSON.stringify(parsed))), data);
+    assert.deepEqual(parse(schema, roundTripJson(parsed)), data);
     for (const [field, value] of Object.entries(data)) {
       if (!field.endsWith("_at") || value === null) continue;
       for (const invalid of [0, new Date(timestamp), "invalid"]) {
