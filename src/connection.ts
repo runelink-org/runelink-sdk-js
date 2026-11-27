@@ -123,7 +123,7 @@ export type RequestOptions = {
   /**
    * Whether to connect if needed. When false, the request is sent only on the
    * socket open when it starts, and fails with `RunelinkDisconnectedError` if
-   * there is none or it closes first.
+   * there is none or it has been replaced.
    */
   readonly connect?: boolean;
 };
