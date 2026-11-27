@@ -122,8 +122,8 @@ export type Options = (
 export type RequestOptions = {
   /**
    * Whether to connect if needed. When false, the request is sent only on the
-   * socket open when it starts, and fails with `RunelinkDisconnectedError` if
-   * there is none or it has been replaced.
+   * socket that is connected when it starts, and fails with
+   * `RunelinkDisconnectedError` if there is none or it has been replaced.
    */
   readonly connect?: boolean;
 };
@@ -729,7 +729,8 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
     input: WsRequest,
     options?: RequestOptions
   ): Effect.fn.Return<WsReply, RunelinkRequestFailure> {
-    // A request that does not connect stays on the socket open when it starts
+    // A request that does not connect stays on the socket connected when it
+    // starts
     const initial = session;
     const invalid = (cause: Schema.SchemaError) =>
       new RunelinkInvalidRequestError({
