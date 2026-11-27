@@ -91,6 +91,23 @@ test('malformed rejection partitions fail negotiation', async () => {
     }));
   }
 });
+test('errors report URLs without credentials, query, or fragment', async () => {
+  for (const [url, host] of [
+    ['ws://bot:pw@localhost:7000/ws?access_token=x#y', 'ws://localhost:7000/ws'],
+    ['/ws?access_token=x', '(redacted URL)'],
+    ['WS://LOCALHOST:7000/ws', 'WS://LOCALHOST:7000/ws'],
+  ]) {
+    await run(Effect.gen(function* () {
+      let dialed;
+      const conn = yield* RunelinkConnection.make({ url, autoReconnect: false })
+        .pipe(Effect.provideService(Socket.WebSocketConstructor, (dialUrl) => { dialed = dialUrl; return new FakeSocket({ ...base, rejected_capabilities: {} }); }));
+      const error = yield* Effect.flip(conn.connect);
+      assert.equal(dialed, url);
+      assert.equal(error.host, host);
+      assert.ok(error.message.startsWith(`${host} is incompatible`));
+    }));
+  }
+});
 test('requests match replies, ignore late replies, and fail when the socket closes', async () => {
   await run(Effect.gen(function* () {
     const conn = yield* connection(base);

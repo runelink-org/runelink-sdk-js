@@ -87,7 +87,7 @@ export type RunelinkHostError =
 export class RunelinkIncompatibleHostError extends Schema.TaggedError<RunelinkIncompatibleHostError>()(
   "RunelinkIncompatibleHostError",
   {
-    // The host, or the websocket URL for URL connections
+    // The host, or for URL connections the redacted websocket URL
     host: Schema.String,
     reason: Schema.String,
   }
@@ -105,6 +105,7 @@ export class RunelinkIncompatibleHostError extends Schema.TaggedError<RunelinkIn
 export class RunelinkUnsupportedCapabilityError extends Schema.TaggedError<RunelinkUnsupportedCapabilityError>()(
   "RunelinkUnsupportedCapabilityError",
   {
+    // The host, or for URL connections the redacted websocket URL
     host: Schema.String,
     capability: Schema.String,
     // Why the host did not agree to it, or omitted when this client lacks it

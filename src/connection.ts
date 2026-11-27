@@ -249,6 +249,24 @@ function normalizeOptions(options: Options) {
   };
 }
 
+// The URL without its credentials, query, or fragment, which may hold secrets,
+// or a placeholder for a URL that does not parse, such as a relative one that
+// a browser resolves against the page
+function redactUrl(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return "(redacted URL)";
+  }
+  const href = parsed.href;
+  parsed.username = "";
+  parsed.password = "";
+  parsed.search = "";
+  parsed.hash = "";
+  return parsed.href === href ? url : parsed.href;
+}
+
 function connectionError(error: Socket.SocketError): RunelinkConnectionError {
   return error.reason._tag === "SocketCloseError"
     ? new RunelinkConnectionError({
@@ -329,7 +347,7 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
   options: Options
 ) {
   const config = normalizeOptions(options);
-  const host = options.host ?? options.url;
+  const host = options.host ?? redactUrl(options.url);
   const webSocketConstructor = yield* Socket.WebSocketConstructor;
   const status = yield* SubscriptionRef.make<Status>("disconnected");
   const updates = yield* PubSub.unbounded<WsUpdate>();
