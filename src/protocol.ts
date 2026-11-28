@@ -100,7 +100,6 @@ export const WsRequestSchema = Schema.Union([
     "users_get_by_ref",
     Schema.Struct({
       user_ref: UserRefSchema,
-      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
