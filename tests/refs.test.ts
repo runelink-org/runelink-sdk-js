@@ -5,9 +5,9 @@ import {
   ServerChannelSchema,
   WsRequestSchema,
   WsUpdateSchema,
-  channelServerRef,
+  serverRefOf,
   resourceKey,
-  textChannelRef,
+  textChannelRefOf,
 } from "../src/index.ts";
 import type {
   ResourceKey,
@@ -57,40 +57,42 @@ it("resources with the same ID on different hosts have different keys", () => {
 });
 
 it("refs and keys of one kind of resource can't stand in for another", () => {
-  const server: ServerRef = channelServerRef(channel);
-  const textChannel: TextChannelRef = textChannelRef(message);
+  const serverRef: ServerRef = serverRefOf(channel);
+  const textChannelRef: TextChannelRef = textChannelRefOf(message);
   // @ts-expect-error A message is not a reference to its text channel.
   const fromMessage: TextChannelRef = message;
   // @ts-expect-error A server ID is not a text channel ID.
-  const fromServer: TextChannelRef = server;
+  const fromServer: TextChannelRef = serverRef;
   // @ts-expect-error A server's key does not index text channels.
-  const key: ResourceKey<TextChannelId> = resourceKey(server);
-  const serverKey: ResourceKey<ServerId> = resourceKey(server);
+  const key: ResourceKey<TextChannelId> = resourceKey(serverRef);
+  const serverKey: ResourceKey<ServerId> = resourceKey(serverRef);
+  // @ts-expect-error Plain strings are not resource IDs.
+  resourceKey({ host: "localhost", id: "plain" });
   assert.equal(fromMessage.id, message.id);
-  assert.equal(fromServer.host, server.host);
+  assert.equal(fromServer.host, serverRef.host);
   assert.equal(key, serverKey);
-  assert.equal(textChannel.id, message.text_channel_id);
+  assert.equal(textChannelRef.id, message.text_channel_id);
 });
 
 it("requests name resources by ref instead of an ID and target host", () => {
   const legacy = { target_host: ref.host };
   const update = { expected_updated_at: updateAt };
   for (const [type, data, old] of [
-    ["servers_get_by_id", { server: ref }, { server_id: id, ...legacy }],
-    ["channels_get_by_id", { channel: ref }, { channel_id: id, ...legacy }],
+    ["servers_get_by_id", { server_ref: ref }, { server_id: id, ...legacy }],
+    ["channels_get_by_id", { channel_ref: ref }, { channel_id: id, ...legacy }],
     [
       "messages_get_by_text_channel",
-      { text_channel: ref },
+      { text_channel_ref: ref },
       { text_channel_id: id, ...legacy },
     ],
     [
       "messages_update",
-      { message: ref, message_update: update },
+      { message_ref: ref, message_update: update },
       { message_id: id, message_update: update, ...legacy },
     ],
     [
       "memberships_upsert",
-      { new_membership: { user_ref, server: ref, role: "member" } },
+      { new_membership: { user_ref, server_ref: ref, role: "member" } },
       {
         server_id: id,
         new_membership: {
@@ -109,13 +111,16 @@ it("requests name resources by ref instead of an ID and target host", () => {
 
 it("deletions name their server by ref", () => {
   for (const update of [
-    { type: "server_deleted", data: { server: ref } },
-    { type: "channel_deleted", data: { server: ref, channel_id: id } },
-    { type: "membership_deleted", data: { server: ref, user_ref } },
+    { type: "server_deleted", data: { server_ref: ref } },
+    { type: "channel_deleted", data: { server_ref: ref, channel_id: id } },
+    { type: "membership_deleted", data: { server_ref: ref, user_ref } },
   ]) {
     assert.ok(ok(WsUpdateSchema, update));
     assert.equal(
-      ok(WsUpdateSchema, { ...update, data: { ...update.data, server: id } }),
+      ok(WsUpdateSchema, {
+        ...update,
+        data: { ...update.data, server_ref: id },
+      }),
       false
     );
   }

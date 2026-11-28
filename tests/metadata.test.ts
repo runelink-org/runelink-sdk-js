@@ -50,7 +50,7 @@ it("creation and patches preserve missing, null, and object metadata", () => {
     assert.deepEqual(parse(ServerChannelUpdateSchema, patch), patch);
     const request = {
       type: "messages_update",
-      data: { message: { host: "localhost", id }, message_update: patch },
+      data: { message_ref: { host: "localhost", id }, message_update: patch },
     };
     assert.deepEqual(parse(WsRequestSchema, request), request);
   }

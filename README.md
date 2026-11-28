@@ -120,9 +120,9 @@ Examples include:
 
 Protocol timestamps, including `created_at`, `updated_at`, and nullable timestamps such as `edited_at`, stay RFC 3339 strings to preserve the host's full precision. Pass `updated_at` directly as `expected_updated_at` when editing a message, channel, or server. Convert timestamps to JavaScript `Date` objects only for display or date calculations, since that conversion discards sub-millisecond precision.
 
-Servers, channels, and messages are owned by one host, and their IDs are only unique on that host. Each one has a `host` field, and requests name them with a `ResourceRef<Id>` of `{ host, id }`, such as `{ type: "servers_get_by_id", data: { server: { host, id } } }`. IDs have a branded type for each kind of resource (`ServerId`, `ServerChannelId`, `TextChannelId`, and `MessageId`), which decoding a reply or update applies, and each kind has a ref alias (`ServerRef`, `ServerChannelRef`, `TextChannelRef`, and `MessageRef`). A server, server channel, or message is its own reference. Use `channelServerRef(channel)` for a channel's server, and `textChannelRef(channelOrMessage)` for the underlying text channel that a server text channel owns or that a message is in. Deletion updates name the server with a `ServerRef`, and `channel_deleted` names the channel by its `channel_id` on that server's host.
+Servers, channels, and messages are owned by one host, and their IDs are only unique on that host. Each one has a `host` field, and requests name them with a `ResourceRef<Id>` of `{ host, id }`, such as `{ type: "servers_get_by_id", data: { server_ref: { host, id } } }`. IDs have a branded type for each kind of resource (`ServerId`, `ServerChannelId`, `TextChannelId`, and `MessageId`), which decoding a reply or update applies, and each kind has a ref alias (`ServerRef`, `ServerChannelRef`, `TextChannelRef`, and `MessageRef`). A server, server channel, or message is its own reference. Use `serverRefOf(channel)` for a channel's server, and `textChannelRefOf(channelOrMessage)` for the underlying text channel that a server text channel owns or that a message is in. Deletion updates name the server with a `ServerRef`, and `channel_deleted` names the channel by its `channel_id` on that server's host.
 
-Use `resourceKey(ref)` to key cached resources, since two hosts can use the same ID. A key's type records the kind of resource, so a `ResourceKey<ServerId>` can't index a cache of text channels. Keys are only stable when hosts are spelled the way the host spells them in its replies: lowercase, without the default port.
+Use `resourceKey(ref)` to key cached resources, since two hosts can use the same ID. A key's type records the kind of resource, so looking up a text channel cache with a `ResourceKey<ServerId>` fails to type-check. TypeScript does not check the keys of computed property writes, such as `{ ...cache, [key]: value }`, so build those keys from refs of the right kind. Keys are only stable when hosts are spelled the way the host spells them in its replies: lowercase, without the default port.
 
 ## Migrating from 0.2
 
@@ -130,9 +130,9 @@ Resource IDs are now scoped to their host:
 
 - `ServerChannel` and `Message` have a `host` field.
 - Resource IDs have branded types for each kind, such as `ServerId`, so plain strings must be decoded with the matching schema, such as `ServerIdSchema`, before they can be used as IDs.
-- Requests that name a server, channel, text channel, or message take a ref (`server`, `channel`, `text_channel`, or `message`) instead of its ID and `target_host`. `target_host` remains on requests that do not name a server, channel, or message.
-- `memberships_upsert` takes only `new_membership`, and `NewServerMembership` names its server with `server` instead of `server_id` and `server_host`.
-- `server_deleted`, `channel_deleted`, and `membership_deleted` updates name their server with `server` instead of `server_id`.
+- Requests that name a server, channel, text channel, or message take a ref (`server_ref`, `channel_ref`, `text_channel_ref`, or `message_ref`) instead of its ID and `target_host`. `target_host` remains on requests that do not name a server, channel, or message.
+- `memberships_upsert` takes only `new_membership`, and `NewServerMembership` names its server with `server_ref` instead of `server_id` and `server_host`.
+- `server_deleted`, `channel_deleted`, and `membership_deleted` updates name their server with `server_ref` instead of `server_id`.
 - These shapes use the 2026.11.27 capability versions, so the affected operations and updates are unavailable on hosts that do not support them yet.
 
 ## Migrating from 0.1
