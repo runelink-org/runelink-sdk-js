@@ -5,7 +5,10 @@ import * as SchemaTransformation from "effect/SchemaTransformation";
 /** The port of a host that names no port. */
 export const DEFAULT_PORT = 7000;
 
-const CanonicalHost = Schema.String.pipe(Schema.brand("Host"));
+// Also checked when a host is made or encoded without decoding
+const CanonicalHost = Schema.String.check(
+  Schema.makeFilter((host) => canonicalHost(host) === host || "Expected a host")
+).pipe(Schema.brand("Host"));
 
 /**
  * A host name or IP address with an optional port, in its canonical spelling:
@@ -16,14 +19,11 @@ const CanonicalHost = Schema.String.pipe(Schema.brand("Host"));
 export type Host = typeof CanonicalHost.Type;
 
 /** Decodes any spelling of a host to its canonical spelling. */
-export const HostSchema = Schema.String.check(
-  Schema.makeFilter(
-    (host) => canonicalHost(host) !== undefined || "Expected a host"
-  )
-).pipe(
+export const HostSchema = Schema.String.pipe(
   Schema.decodeTo(
     CanonicalHost,
     SchemaTransformation.transform({
+      // A host that doesn't parse fails the canonical check.
       decode: (host) => canonicalHost(host) ?? host,
       encode: (host) => host,
     })
@@ -38,11 +38,15 @@ const parseUrl = Option.liftThrowable((url: string) => new URL(url));
  * trailing slash. Throws if it is not a host.
  */
 export function validateHost(input: string): Host {
-  const trimmed = input.trim().toLowerCase();
-  const host = trimmed.replace(/^https?:\/\//u, "").replace(/\/$/u, "");
+  const host = input
+    .trim()
+    .replace(/^https?:\/\//iu, "")
+    .replace(/\/$/u, "");
+  // The input isn't quoted, since a pasted URL may hold credentials.
   return Option.getOrThrowWith(
     decodeHost(host),
-    () => new Error(`Invalid host: ${JSON.stringify(trimmed)}`)
+    () =>
+      new Error("Expected a host name or IP address, with an optional port.")
   );
 }
 
@@ -76,11 +80,12 @@ function canonicalHost(host: string): string | undefined {
   const name = hasPort ? host.slice(0, colon) : host;
   const port = hasPort ? host.slice(colon + 1) : undefined;
   const isIpv6 = name.startsWith("[") && name.endsWith("]");
-  // URLs would also accept a port, credentials, a path, surrounding spaces,
-  // or percent-encoding here.
+  // URLs would also accept a port, credentials, a path, or percent-encoding
+  // here, and would drop ASCII spaces and control characters.
   if (
     name === "" ||
-    /[\s/?#@\\%]/u.test(name) ||
+    // oxlint-disable-next-line eslint/no-control-regex -- URLs drop control characters, which a host must not contain.
+    /[\u0000-\u0020\u007F/?#@\\%]/u.test(name) ||
     (!isIpv6 && name.includes(":"))
   ) {
     return undefined;

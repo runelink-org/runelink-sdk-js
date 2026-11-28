@@ -12,6 +12,7 @@ import {
   describeCapabilityIssue,
   RunelinkConnection,
   WsRequestEnvelopeSchema,
+  validateHost,
 } from "../src/index.ts";
 import type { RunelinkConnectionIssue, WsUpdate } from "../src/index.ts";
 

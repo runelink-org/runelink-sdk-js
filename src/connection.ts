@@ -132,8 +132,12 @@ export type Options = (
   readonly reconnectBackoffMultiplier?: number;
   readonly reconnectJitterRatio?: number;
   readonly maxReconnectAttempts?: number | null;
-  /** Whether a host connection may fall back to `ws` if `wss` never opens. */
-  readonly transportSecurity?: "secure-only" | "prefer-secure";
+  /**
+   * The schemes a host connection uses: `wss` with a fallback to `ws` if it
+   * never opens (the default), only `wss`, or only `ws`.
+   */
+  readonly transportSecurity?:
+    "secure-only" | "prefer-secure" | "insecure-only";
   readonly capabilities?: SupportedCapabilities;
 };
 
@@ -432,7 +436,9 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
   // delay. Connecting during a dial joins it, as the old SDK did.
   let wake = Deferred.makeUnsafe<undefined>();
   let dialing = false;
-  const primaryUrl = options.url ?? hostClientWsUrl(options.host, true);
+  const primaryUrl =
+    options.url ??
+    hostClientWsUrl(options.host, config.transportSecurity !== "insecure-only");
   // Host connections may fall back to this if the secure socket never opens
   const insecureUrl =
     options.host !== undefined && config.transportSecurity === "prefer-secure"
