@@ -119,11 +119,18 @@ export type Options = (
       /** Connects to the host's client websocket, trying `wss` first. */
       readonly host: Host;
       readonly url?: undefined;
+      /**
+       * The schemes the connection uses: `wss` with a fallback to `ws` if it
+       * never opens (the default), only `wss`, or only `ws`.
+       */
+      readonly transportSecurity?:
+        "secure-only" | "prefer-secure" | "insecure-only";
     }
   | {
-      /** Connects to this websocket URL directly. */
+      /** Connects to this websocket URL directly, with its scheme. */
       readonly url: string;
       readonly host?: undefined;
+      readonly transportSecurity?: undefined;
     }
 ) & {
   readonly autoReconnect?: boolean;
@@ -132,12 +139,6 @@ export type Options = (
   readonly reconnectBackoffMultiplier?: number;
   readonly reconnectJitterRatio?: number;
   readonly maxReconnectAttempts?: number | null;
-  /**
-   * The schemes a host connection uses: `wss` with a fallback to `ws` if it
-   * never opens (the default), only `wss`, or only `ws`.
-   */
-  readonly transportSecurity?:
-    "secure-only" | "prefer-secure" | "insecure-only";
   readonly capabilities?: SupportedCapabilities;
 };
 

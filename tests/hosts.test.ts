@@ -73,7 +73,7 @@ it("hosts name their URLs with ports", () => {
 it("entered hosts may have a scheme or a trailing slash", () => {
   assert.equal(validateHost(" HTTPS://Example.COM:7000/ "), "example.com");
   assert.equal(validateHost("ΟΣ"), "xn--0xai");
-  assert.equal(validateHost("http://localhost:7001"), "localhost:7001");
+  assert.equal(validateHost("http://localhost:7001//"), "localhost:7001");
   for (const input of ["example.com:abc", "exa$mple.com", "", "a/b"]) {
     assert.throws(() => validateHost(input), input);
   }

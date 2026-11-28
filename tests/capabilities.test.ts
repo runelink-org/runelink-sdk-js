@@ -47,11 +47,16 @@ class FakeSocket extends EventTarget {
   readonly welcome: object;
   readyState = 0;
   requests: string[] = [];
-  constructor(welcome: object) {
+  // Without `opens`, it closes before opening, as a failed TLS handshake does.
+  constructor(welcome: object, opens = true) {
     super();
     FakeSocket.last = this;
     this.welcome = welcome;
     queueMicrotask(() => {
+      if (!opens) {
+        this.close(1006);
+        return;
+      }
       this.readyState = 1;
       this.dispatchEvent(new Event("open"));
     });
@@ -411,6 +416,23 @@ it.effect("error replies fail with the tagged error for their code", () =>
         assert.equal(error.message, `Host says ${code}`);
       }
     }
+  })
+);
+it.effect("secure-only host connections never fall back to ws", () =>
+  Effect.gen(function* () {
+    const urls: string[] = [];
+    const conn = yield* RunelinkConnection.make({
+      host: validateHost("localhost:7001"),
+      transportSecurity: "secure-only",
+      autoReconnect: false,
+    }).pipe(
+      Effect.provideService(Socket.WebSocketConstructor, (dialed) => {
+        urls.push(dialed);
+        return new FakeSocket(base, false);
+      })
+    );
+    yield* Effect.flip(conn.connect);
+    assert.deepEqual(urls, ["wss://localhost:7001/ws/client"]);
   })
 );
 it.effect("a socket constructor failure fails connect instead of hanging", () =>
