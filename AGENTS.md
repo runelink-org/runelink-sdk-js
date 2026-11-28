@@ -16,7 +16,7 @@ Read [the Effect conventions](docs/effect-conventions.md) before changing Effect
 
 ## Best Practices
 
-- The SDK is pre-1.0 and its main consumer is the demo client, so prefer clean breaks over compatibility shims, and document breaking changes in the README
+- The SDK is pre-1.0 and its main consumer is the demo client, so prefer clean breaks over compatibility shims, without migration guides
 - Prefer traditional function syntax (for example, `function name() {}`) over arrow-assigned helpers when possible
 
 ## Releases

@@ -116,7 +116,7 @@ export type Status =
 
 export type Options = (
   | {
-      /** Connects to the host's client websocket, trying `wss` first. */
+      /** Connects to the host's client websocket over the schemes below. */
       readonly host: Host;
       readonly url?: undefined;
       /**
