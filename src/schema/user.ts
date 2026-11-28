@@ -1,16 +1,16 @@
 import * as Schema from "effect/Schema";
-import { Timestamp } from "./primitives.js";
+import { HostSchema, Timestamp } from "./primitives.js";
 
 export const UserRoleSchema = Schema.Literals(["user", "admin"]);
 
 export const UserRefSchema = Schema.Struct({
   name: Schema.String,
-  host: Schema.String,
+  host: HostSchema,
 });
 
 export const UserSchema = Schema.Struct({
   name: Schema.String,
-  host: Schema.String,
+  host: HostSchema,
   role: UserRoleSchema,
   created_at: Timestamp,
   updated_at: Timestamp,
@@ -19,7 +19,7 @@ export const UserSchema = Schema.Struct({
 
 export const NewUserSchema = Schema.Struct({
   name: Schema.String,
-  host: Schema.String,
+  host: HostSchema,
   role: UserRoleSchema,
 });
 

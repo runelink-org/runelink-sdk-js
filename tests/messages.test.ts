@@ -10,6 +10,7 @@ import { parseVariant, parse, ok, roundTripJson } from "./schema-assertions.ts";
 
 const base = {
   id: "00000000-0000-4000-8000-000000000001",
+  host: "localhost",
   text_channel_id: "00000000-0000-4000-8000-000000000002",
   author: null,
   reply_to: "00000000-0000-4000-8000-000000000003",

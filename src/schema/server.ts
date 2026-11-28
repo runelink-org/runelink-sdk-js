@@ -1,12 +1,19 @@
 import * as Schema from "effect/Schema";
 import { ServerChannelSchema } from "./channel.js";
 import { detailsUpdateFields } from "./edit.js";
-import { ExactStruct, NullDefault, Timestamp, Uuid } from "./primitives.js";
+import {
+  ExactStruct,
+  HostSchema,
+  NullDefault,
+  Timestamp,
+  Uuid,
+} from "./primitives.js";
+import { ResourceRefSchema } from "./ref.js";
 import { UserRefSchema, UserSchema } from "./user.js";
 
 export const ServerSchema = Schema.Struct({
   id: Uuid,
-  host: Schema.String,
+  host: HostSchema,
   title: Schema.String,
   description: NullDefault(Schema.String),
   created_at: Timestamp,
@@ -55,8 +62,7 @@ export const ServerMemberSchema = Schema.Struct({
 
 export const NewServerMembershipSchema = Schema.Struct({
   user_ref: UserRefSchema,
-  server_id: Uuid,
-  server_host: Schema.String,
+  server: ResourceRefSchema,
   role: ServerRoleSchema,
 });
 

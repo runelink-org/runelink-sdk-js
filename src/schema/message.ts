@@ -1,13 +1,22 @@
 import * as Schema from "effect/Schema";
 import { MetadataSchema } from "./metadata.js";
-import { ExactStruct, NullDefault, Timestamp, Uuid } from "./primitives.js";
+import {
+  ExactStruct,
+  HostSchema,
+  NullDefault,
+  Timestamp,
+  Uuid,
+} from "./primitives.js";
 import { UserRefSchema, UserSchema } from "./user.js";
 
 const messageFields = {
   metadata: MetadataSchema.pipe(Schema.NullOr, Schema.optional),
   id: Uuid,
+  // The host of the message's text channel
+  host: HostSchema,
   text_channel_id: Uuid,
   author: Schema.NullOr(UserSchema),
+  // A message in the same text channel
   reply_to: Schema.NullOr(Uuid),
   edited_at: NullDefault(Timestamp),
   created_at: Timestamp,

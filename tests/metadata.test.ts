@@ -50,7 +50,7 @@ it("creation and patches preserve missing, null, and object metadata", () => {
     assert.deepEqual(parse(ServerChannelUpdateSchema, patch), patch);
     const request = {
       type: "messages_update",
-      data: { message_id: id, message_update: patch, target_host: null },
+      data: { message: { host: "localhost", id }, message_update: patch },
     };
     assert.deepEqual(parse(WsRequestSchema, request), request);
   }
@@ -75,6 +75,7 @@ it("creation and patches preserve missing, null, and object metadata", () => {
 it("metadata survives reply and pushed update validation", () => {
   const message = {
     id,
+    host: "localhost",
     text_channel_id: id,
     author: null,
     reply_to: null,
@@ -86,6 +87,7 @@ it("metadata survives reply and pushed update validation", () => {
   };
   const channel = {
     id,
+    host: "localhost",
     server_id: id,
     kind: "category",
     title: "test",

@@ -36,6 +36,7 @@ const server = {
 };
 const channel = {
   id: "00000000-0000-4000-8000-000000000002",
+  host: server.host,
   server_id: server.id,
   kind: "category",
   title: "Test category",
@@ -55,6 +56,7 @@ const membership = {
 };
 const message = {
   id: channel.id,
+  host: server.host,
   text_channel_id: channel.id,
   author: user,
   reply_to: null,
@@ -167,10 +169,15 @@ it("edit requests accept the original updated_at without conversion", () => {
   }
 });
 
-it("metadata and description operations use the new version", () => {
+it("operations whose shapes changed use the new version", () => {
   for (const capability of [
     "messages.update",
     "messages.create",
+    "messages.read",
+    "messages.delete",
+    "messages.events",
+    "channels.delete",
+    "servers.delete",
     "channels.update",
     "channels.create",
     "channels.read",
@@ -184,7 +191,7 @@ it("metadata and description operations use the new version", () => {
     "memberships.events",
   ]) {
     assert.deepEqual(CLIENT_WS_SUPPORTED_CAPABILITIES[capability], [
-      "2026.11.13",
+      "2026.11.27",
     ]);
   }
 });

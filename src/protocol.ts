@@ -2,7 +2,7 @@ import * as Schema from "effect/Schema";
 import { MessageUpdateSchema } from "./schema/message.js";
 import { ServerUpdateSchema } from "./schema/server.js";
 import { ServerChannelUpdateSchema } from "./schema/channel.js";
-import { Uuid } from "./schema/primitives.js";
+import { HostSchema, Uuid } from "./schema/primitives.js";
 import {
   AuthTokenPasswordRequestSchema,
   AuthTokenRefreshRequestSchema,
@@ -15,6 +15,7 @@ import {
   NewServerSchema,
   NewUserSchema,
   OidcDiscoveryDocumentSchema,
+  ResourceRefSchema,
   ServerChannelMoveSchema,
   ServerChannelSchema,
   ServerMemberSchema,
@@ -56,7 +57,7 @@ function dataVariant<const Type extends string, Data extends Schema.Top>(
   });
 }
 
-const TargetHostSchema = Schema.NullOr(Schema.String);
+const TargetHostSchema = Schema.NullOr(HostSchema);
 
 export const WsConnectionStateSchema = Schema.Union([
   unitVariant("unauthenticated"),
@@ -119,39 +120,34 @@ export const WsRequestSchema = Schema.Union([
   dataVariant(
     "memberships_get_members_by_server",
     Schema.Struct({
-      server_id: Uuid,
-      target_host: TargetHostSchema,
+      server: ResourceRefSchema,
     })
   ),
   dataVariant(
     "memberships_get_by_user_and_server",
     Schema.Struct({
-      server_id: Uuid,
+      server: ResourceRefSchema,
       user_ref: UserRefSchema,
-      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "memberships_upsert",
     Schema.Struct({
-      server_id: Uuid,
       new_membership: NewServerMembershipSchema,
     })
   ),
   dataVariant(
     "memberships_delete",
     Schema.Struct({
-      server_id: Uuid,
+      server: ResourceRefSchema,
       user_ref: UserRefSchema,
-      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "servers_update",
     Schema.Struct({
-      server_id: Uuid,
+      server: ResourceRefSchema,
       server_update: ServerUpdateSchema,
-      target_host: Schema.optional(TargetHostSchema),
     })
   ),
   dataVariant(
@@ -170,38 +166,33 @@ export const WsRequestSchema = Schema.Union([
   dataVariant(
     "servers_get_by_id",
     Schema.Struct({
-      server_id: Uuid,
-      target_host: TargetHostSchema,
+      server: ResourceRefSchema,
     })
   ),
   dataVariant(
     "servers_get_with_channels",
     Schema.Struct({
-      server_id: Uuid,
-      target_host: TargetHostSchema,
+      server: ResourceRefSchema,
     })
   ),
   dataVariant(
     "servers_delete",
     Schema.Struct({
-      server_id: Uuid,
-      target_host: TargetHostSchema,
+      server: ResourceRefSchema,
     })
   ),
   dataVariant(
     "channels_update",
     Schema.Struct({
-      channel_id: Uuid,
+      channel: ResourceRefSchema,
       channel_update: ServerChannelUpdateSchema,
-      target_host: Schema.optional(TargetHostSchema),
     })
   ),
   dataVariant(
     "channels_create",
     Schema.Struct({
-      server_id: Uuid,
+      server: ResourceRefSchema,
       new_channel: NewServerChannelSchema,
-      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
@@ -213,46 +204,40 @@ export const WsRequestSchema = Schema.Union([
   dataVariant(
     "channels_get_by_server",
     Schema.Struct({
-      server_id: Uuid,
-      target_host: TargetHostSchema,
+      server: ResourceRefSchema,
     })
   ),
   dataVariant(
     "channels_get_by_id",
     Schema.Struct({
-      channel_id: Uuid,
-      target_host: TargetHostSchema,
+      channel: ResourceRefSchema,
     })
   ),
   dataVariant(
     "channels_delete",
     Schema.Struct({
-      channel_id: Uuid,
-      target_host: TargetHostSchema,
+      channel: ResourceRefSchema,
     })
   ),
   dataVariant(
     "channels_move",
     Schema.Struct({
-      channel_id: Uuid,
+      channel: ResourceRefSchema,
       channel_move: ServerChannelMoveSchema,
-      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
     "messages_update",
     Schema.Struct({
-      message_id: Uuid,
+      message: ResourceRefSchema,
       message_update: MessageUpdateSchema,
-      target_host: Schema.optional(TargetHostSchema),
     })
   ),
   dataVariant(
     "messages_create",
     Schema.Struct({
-      text_channel_id: Uuid,
+      text_channel: ResourceRefSchema,
       new_message: NewMessageSchema,
-      target_host: TargetHostSchema,
     })
   ),
   dataVariant(
@@ -264,29 +249,25 @@ export const WsRequestSchema = Schema.Union([
   dataVariant(
     "messages_get_by_server",
     Schema.Struct({
-      server_id: Uuid,
-      target_host: TargetHostSchema,
+      server: ResourceRefSchema,
     })
   ),
   dataVariant(
     "messages_get_by_text_channel",
     Schema.Struct({
-      text_channel_id: Uuid,
-      target_host: TargetHostSchema,
+      text_channel: ResourceRefSchema,
     })
   ),
   dataVariant(
     "messages_get_by_id",
     Schema.Struct({
-      message_id: Uuid,
-      target_host: TargetHostSchema,
+      message: ResourceRefSchema,
     })
   ),
   dataVariant(
     "messages_delete",
     Schema.Struct({
-      message_id: Uuid,
-      target_host: TargetHostSchema,
+      message: ResourceRefSchema,
     })
   ),
 ]);
@@ -302,7 +283,7 @@ export const WsReplySchema = Schema.Union([
   dataVariant("users_create", UserSchema),
   dataVariant("users_get_all", Schema.Array(UserSchema)),
   dataVariant("users_get_by_ref", UserSchema),
-  dataVariant("users_get_associated_hosts", Schema.Array(Schema.String)),
+  dataVariant("users_get_associated_hosts", Schema.Array(HostSchema)),
   unitVariant("users_delete"),
   dataVariant("memberships_get_by_user", Schema.Array(ServerMembershipSchema)),
   dataVariant(
@@ -346,7 +327,7 @@ export const WsUpdateSchema = Schema.Union([
   dataVariant(
     "membership_deleted",
     Schema.Struct({
-      server_id: Uuid,
+      server: ResourceRefSchema,
       user_ref: UserRefSchema,
     })
   ),
@@ -354,14 +335,14 @@ export const WsUpdateSchema = Schema.Union([
   dataVariant(
     "server_deleted",
     Schema.Struct({
-      server_id: Uuid,
+      server: ResourceRefSchema,
     })
   ),
   dataVariant("channel_upserted", ServerChannelSchema),
   dataVariant(
     "channel_deleted",
     Schema.Struct({
-      server_id: Uuid,
+      server: ResourceRefSchema,
       channel_id: Uuid,
     })
   ),
