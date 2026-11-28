@@ -8,6 +8,7 @@ import {
   serverRefOf,
   resourceKey,
   textChannelRefOf,
+  validateHost,
 } from "../src/index.ts";
 import type {
   ResourceKey,
@@ -51,7 +52,7 @@ const message = parse(MessageSchema, {
 it("resources with the same ID on different hosts have different keys", () => {
   assert.notEqual(
     resourceKey(channel),
-    resourceKey({ ...channel, host: "localhost" })
+    resourceKey({ ...channel, host: validateHost("localhost") })
   );
   assert.equal(resourceKey(channel), resourceKey({ ...channel }));
 });

@@ -1,6 +1,8 @@
 import type * as Brand from "effect/Brand";
 import * as Schema from "effect/Schema";
-import { HostSchema, Uuid } from "./primitives.js";
+import { HostSchema } from "./host.js";
+import type { Host } from "./host.js";
+import { Uuid } from "./primitives.js";
 
 // IDs are only unique among resources of one kind on one host. Each kind has
 // its own type, so an ID of one kind can't be used for another.
@@ -22,7 +24,7 @@ export type ResourceId = ServerId | ServerChannelId | TextChannelId | MessageId;
  * Together they identify the resource across hosts.
  */
 export interface ResourceRef<Id extends ResourceId> {
-  readonly host: string;
+  readonly host: Host;
   readonly id: Id;
 }
 
@@ -64,7 +66,7 @@ export function resourceKey<Id extends ResourceId>(
 
 /** The server that a channel is in, which is on the channel's host. */
 export function serverRefOf(channel: {
-  readonly host: string;
+  readonly host: Host;
   readonly server_id: ServerId;
 }): ServerRef {
   return { host: channel.host, id: channel.server_id };
@@ -75,7 +77,7 @@ export function serverRefOf(channel: {
  * which is on the same host.
  */
 export function textChannelRefOf(owner: {
-  readonly host: string;
+  readonly host: Host;
   readonly text_channel_id: TextChannelId;
 }): TextChannelRef {
   return { host: owner.host, id: owner.text_channel_id };

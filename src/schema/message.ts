@@ -1,11 +1,7 @@
 import * as Schema from "effect/Schema";
 import { MetadataSchema } from "./metadata.js";
-import {
-  ExactStruct,
-  HostSchema,
-  NullDefault,
-  Timestamp,
-} from "./primitives.js";
+import { HostSchema } from "./host.js";
+import { ExactStruct, NullDefault, Timestamp } from "./primitives.js";
 import { MessageIdSchema, TextChannelIdSchema } from "./ref.js";
 import { UserRefSchema, UserSchema } from "./user.js";
 

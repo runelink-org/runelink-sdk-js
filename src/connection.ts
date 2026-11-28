@@ -65,7 +65,8 @@ import type {
   WsRequest,
   WsUpdate,
 } from "./protocol.js";
-import { getWsUrl } from "./util.js";
+import { hostClientWsUrl } from "./schema/host.js";
+import type { Host } from "./schema/host.js";
 
 const DEFAULT_RECONNECT_INITIAL_DELAY_MS = 1000;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30_000;
@@ -116,7 +117,7 @@ export type Status =
 export type Options = (
   | {
       /** Connects to the host's client websocket, trying `wss` first. */
-      readonly host: string;
+      readonly host: Host;
       readonly url?: undefined;
     }
   | {
@@ -431,11 +432,11 @@ export const make = Effect.fn("RunelinkConnection.make")(function* (
   // delay. Connecting during a dial joins it, as the old SDK did.
   let wake = Deferred.makeUnsafe<undefined>();
   let dialing = false;
-  const primaryUrl = options.url ?? getWsUrl(options.host, true);
+  const primaryUrl = options.url ?? hostClientWsUrl(options.host, true);
   // Host connections may fall back to this if the secure socket never opens
   const insecureUrl =
     options.host !== undefined && config.transportSecurity === "prefer-secure"
-      ? getWsUrl(options.host, false)
+      ? hostClientWsUrl(options.host, false)
       : undefined;
   // The URL the first socket to open used, which later attempts start from
   let openedUrl: string | undefined;
