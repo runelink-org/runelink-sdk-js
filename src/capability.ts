@@ -93,6 +93,9 @@ const capabilityVersion = {
     delete: "2026.11.27",
     events: "2026.11.27",
   },
+  presence: {
+    status: "2026.11.28",
+  },
 } as const;
 
 // The current supported protocol versions of each capability
@@ -143,6 +146,9 @@ const capabilityVersions = {
     delete: [capabilityVersion.messages.delete],
     events: [capabilityVersion.messages.events],
   },
+  presence: {
+    status: [capabilityVersion.presence.status],
+  },
 };
 
 const clientWsCapabilityCatalog = freezeCapabilities({
@@ -177,6 +183,7 @@ const clientWsCapabilityCatalog = freezeCapabilities({
   "servers.events": capabilityVersions.servers.events,
   "channels.events": capabilityVersions.channels.events,
   "messages.events": capabilityVersions.messages.events,
+  "presence.status": capabilityVersions.presence.status,
 });
 
 export type ClientWsCapabilityId = keyof typeof clientWsCapabilityCatalog;
@@ -278,6 +285,9 @@ export function requestCapability(request: WsRequest): ClientWsCapabilityId {
     case "messages_delete": {
       return "messages.delete";
     }
+    case "presence_status_update": {
+      return "presence.status";
+    }
   }
 }
 
@@ -301,6 +311,10 @@ export function updateCapability(update: WsUpdate): ClientWsCapabilityId {
     }
     case "message_upserted": {
       return "messages.events";
+    }
+    case "presence_status_updated":
+    case "chosen_presence_status_updated": {
+      return "presence.status";
     }
   }
 }

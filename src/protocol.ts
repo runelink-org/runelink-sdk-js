@@ -7,6 +7,7 @@ import { Uuid } from "./schema/primitives.js";
 import {
   AuthTokenPasswordRequestSchema,
   AuthTokenRefreshRequestSchema,
+  ChosenPresenceStatusSchema,
   FullServerMembershipSchema,
   JwksResponseSchema,
   MessageSchema,
@@ -29,6 +30,7 @@ import {
   ServerWithChannelsSchema,
   SignupRequestSchema,
   TokenResponseSchema,
+  UserPresenceStatusSchema,
   UserRefSchema,
   UserSchema,
 } from "./schema/index.js";
@@ -63,6 +65,10 @@ function dataVariant<const Type extends string, Data extends Schema.Top>(
 }
 
 const TargetHostSchema = Schema.NullOr(HostSchema);
+
+const ChosenPresenceStatusDataSchema = Schema.Struct({
+  status: ChosenPresenceStatusSchema,
+});
 
 export const WsConnectionStateSchema = Schema.Union([
   unitVariant("unauthenticated"),
@@ -274,6 +280,7 @@ export const WsRequestSchema = Schema.Union([
       message_ref: MessageRefSchema,
     })
   ),
+  dataVariant("presence_status_update", ChosenPresenceStatusDataSchema),
 ]);
 
 export const WsReplySchema = Schema.Union([
@@ -317,6 +324,7 @@ export const WsReplySchema = Schema.Union([
   dataVariant("messages_get_by_text_channel", Schema.Array(MessageSchema)),
   dataVariant("messages_get_by_id", MessageSchema),
   dataVariant("messages_delete", MessageSchema),
+  unitVariant("presence_status_update"),
 ]);
 
 export const WsUpdateSchema = Schema.Union([
@@ -351,6 +359,8 @@ export const WsUpdateSchema = Schema.Union([
     })
   ),
   dataVariant("message_upserted", MessageSchema),
+  dataVariant("presence_status_updated", UserPresenceStatusSchema),
+  dataVariant("chosen_presence_status_updated", ChosenPresenceStatusDataSchema),
 ]);
 
 export const WsRequestEnvelopeSchema = dataVariant(
@@ -464,6 +474,7 @@ export const REPLY_TYPE_BY_REQUEST_TYPE = {
   messages_get_by_text_channel: "messages_get_by_text_channel",
   messages_get_by_id: "messages_get_by_id",
   messages_delete: "messages_delete",
+  presence_status_update: "presence_status_update",
 } as const satisfies Record<WsRequest["type"], WsReply["type"] | null>;
 
 /** The reply to a request of the given type. */
