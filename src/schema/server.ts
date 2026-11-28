@@ -6,13 +6,12 @@ import {
   HostSchema,
   NullDefault,
   Timestamp,
-  Uuid,
 } from "./primitives.js";
-import { ResourceRefSchema } from "./ref.js";
+import { ServerIdSchema, ServerRefSchema } from "./ref.js";
 import { UserRefSchema, UserSchema } from "./user.js";
 
 export const ServerSchema = Schema.Struct({
-  id: Uuid,
+  id: ServerIdSchema,
   host: HostSchema,
   title: Schema.String,
   description: NullDefault(Schema.String),
@@ -62,7 +61,7 @@ export const ServerMemberSchema = Schema.Struct({
 
 export const NewServerMembershipSchema = Schema.Struct({
   user_ref: UserRefSchema,
-  server: ResourceRefSchema,
+  server: ServerRefSchema,
   role: ServerRoleSchema,
 });
 

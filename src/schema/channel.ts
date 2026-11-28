@@ -6,21 +6,25 @@ import {
   HostSchema,
   NullDefault,
   Timestamp,
-  Uuid,
 } from "./primitives.js";
+import {
+  ServerChannelIdSchema,
+  ServerIdSchema,
+  TextChannelIdSchema,
+} from "./ref.js";
 
 export const ServerChannelKindSchema = Schema.Literals(["text", "category"]);
 
 const serverChannelFields = {
   metadata: MetadataSchema.pipe(Schema.NullOr, Schema.optional),
-  id: Uuid,
+  id: ServerChannelIdSchema,
   // The host of the channel's server
   host: HostSchema,
-  server_id: Uuid,
+  server_id: ServerIdSchema,
   title: Schema.String,
   description: NullDefault(Schema.String),
   // The parent category, or null at the server root
-  parent_channel_id: Schema.NullOr(Uuid),
+  parent_channel_id: Schema.NullOr(ServerChannelIdSchema),
   // Ordering among siblings, by `position` then `id`
   position: Schema.Int,
   created_at: Timestamp,
@@ -34,7 +38,7 @@ export const ServerChannelSchema = Schema.Union([
   Schema.Struct({
     ...serverChannelFields,
     kind: Schema.Literal("text"),
-    text_channel_id: Uuid,
+    text_channel_id: TextChannelIdSchema,
   }),
   Schema.Struct({
     ...serverChannelFields,
@@ -48,13 +52,13 @@ export const NewServerChannelSchema = Schema.Struct({
   kind: ServerChannelKindSchema,
   title: Schema.String,
   description: Schema.String.pipe(Schema.NullOr, Schema.optional),
-  parent_channel_id: Schema.NullOr(Uuid),
+  parent_channel_id: Schema.NullOr(ServerChannelIdSchema),
 });
 
 // Moves a server channel, with its subtree, to an index among the children of
 // `parent_channel_id`. Indices past the end place it last.
 export const ServerChannelMoveSchema = Schema.Struct({
-  parent_channel_id: Schema.NullOr(Uuid),
+  parent_channel_id: Schema.NullOr(ServerChannelIdSchema),
   // A u32 on the host
   index: Schema.Finite.check(Schema.isUint32()),
 });
