@@ -34,14 +34,14 @@ const decodeHost = Schema.decodeOption(HostSchema);
 const parseUrl = Option.liftThrowable((url: string) => new URL(url));
 
 /**
- * Parses a host that a person entered, which may also have a URL scheme or a
- * trailing slash. Throws if it is not a host.
+ * Parses a host that a person entered, which may also have a URL scheme or
+ * trailing slashes. Throws if it is not a host.
  */
 export function validateHost(input: string): Host {
   const host = input
     .trim()
     .replace(/^https?:\/\//iu, "")
-    .replace(/\/$/u, "");
+    .replace(/\/+$/u, "");
   // The input isn't quoted, since a pasted URL may hold credentials.
   return Option.getOrThrowWith(
     decodeHost(host),
@@ -52,11 +52,7 @@ export function validateHost(input: string): Host {
 
 /** The host with its port, even the default one, for connecting to it. */
 export function hostAuthority(host: Host): string {
-  // An unported IPv6 address ends with its closing bracket.
-  const colon = host.lastIndexOf(":");
-  return colon !== -1 && !host.slice(colon).includes("]")
-    ? host
-    : `${host}:${DEFAULT_PORT}`;
+  return splitPort(host).port === undefined ? `${host}:${DEFAULT_PORT}` : host;
 }
 
 /** The base URL of the host's HTTP API. */
@@ -74,11 +70,7 @@ export function hostClientWsUrl(host: Host, secure: boolean): string {
  * or `undefined` if it is not one. It matches the hosts' own parser.
  */
 function canonicalHost(host: string): string | undefined {
-  const colon = host.lastIndexOf(":");
-  // The last colon of an unported IPv6 address is inside its brackets.
-  const hasPort = colon !== -1 && !host.slice(colon).includes("]");
-  const name = hasPort ? host.slice(0, colon) : host;
-  const port = hasPort ? host.slice(colon + 1) : undefined;
+  const { name, port } = splitPort(host);
   const isIpv6 = name.startsWith("[") && name.endsWith("]");
   // URLs would also accept a port, credentials, a path, or percent-encoding
   // here, and would drop ASCII spaces and control characters.
@@ -95,8 +87,8 @@ function canonicalHost(host: string): string | undefined {
     return undefined;
   }
   const { hostname } = url.value;
-  const isIp = isIpv6 || /^\d+\.\d+\.\d+\.\d+$/u.test(hostname);
-  if (!isIp && !hostname.split(".").every(isHostLabel)) {
+  // IPv4 addresses are written in decimal, so their parts are labels too.
+  if (!isIpv6 && !hostname.split(".").every(isHostLabel)) {
     return undefined;
   }
   if (port === undefined) {
@@ -108,6 +100,15 @@ function canonicalHost(host: string): string | undefined {
   return Number(port) === DEFAULT_PORT
     ? hostname
     : `${hostname}:${Number(port)}`;
+}
+
+/** Splits a host into its name and its port, if it has one. */
+function splitPort(host: string): { name: string; port: string | undefined } {
+  const colon = host.lastIndexOf(":");
+  // The last colon of an unported IPv6 address is inside its brackets.
+  return colon === -1 || host.slice(colon).includes("]")
+    ? { name: host, port: undefined }
+    : { name: host.slice(0, colon), port: host.slice(colon + 1) };
 }
 
 function isHostLabel(label: string): boolean {
