@@ -61,7 +61,7 @@ export const ServerMemberSchema = Schema.Struct({
 
 export const NewServerMembershipSchema = Schema.Struct({
   user_ref: UserRefSchema,
-  server: ServerRefSchema,
+  server_ref: ServerRefSchema,
   role: ServerRoleSchema,
 });
 

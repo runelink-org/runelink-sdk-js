@@ -124,13 +124,13 @@ export const WsRequestSchema = Schema.Union([
   dataVariant(
     "memberships_get_members_by_server",
     Schema.Struct({
-      server: ServerRefSchema,
+      server_ref: ServerRefSchema,
     })
   ),
   dataVariant(
     "memberships_get_by_user_and_server",
     Schema.Struct({
-      server: ServerRefSchema,
+      server_ref: ServerRefSchema,
       user_ref: UserRefSchema,
     })
   ),
@@ -143,14 +143,14 @@ export const WsRequestSchema = Schema.Union([
   dataVariant(
     "memberships_delete",
     Schema.Struct({
-      server: ServerRefSchema,
+      server_ref: ServerRefSchema,
       user_ref: UserRefSchema,
     })
   ),
   dataVariant(
     "servers_update",
     Schema.Struct({
-      server: ServerRefSchema,
+      server_ref: ServerRefSchema,
       server_update: ServerUpdateSchema,
     })
   ),
@@ -170,32 +170,32 @@ export const WsRequestSchema = Schema.Union([
   dataVariant(
     "servers_get_by_id",
     Schema.Struct({
-      server: ServerRefSchema,
+      server_ref: ServerRefSchema,
     })
   ),
   dataVariant(
     "servers_get_with_channels",
     Schema.Struct({
-      server: ServerRefSchema,
+      server_ref: ServerRefSchema,
     })
   ),
   dataVariant(
     "servers_delete",
     Schema.Struct({
-      server: ServerRefSchema,
+      server_ref: ServerRefSchema,
     })
   ),
   dataVariant(
     "channels_update",
     Schema.Struct({
-      channel: ServerChannelRefSchema,
+      channel_ref: ServerChannelRefSchema,
       channel_update: ServerChannelUpdateSchema,
     })
   ),
   dataVariant(
     "channels_create",
     Schema.Struct({
-      server: ServerRefSchema,
+      server_ref: ServerRefSchema,
       new_channel: NewServerChannelSchema,
     })
   ),
@@ -208,39 +208,39 @@ export const WsRequestSchema = Schema.Union([
   dataVariant(
     "channels_get_by_server",
     Schema.Struct({
-      server: ServerRefSchema,
+      server_ref: ServerRefSchema,
     })
   ),
   dataVariant(
     "channels_get_by_id",
     Schema.Struct({
-      channel: ServerChannelRefSchema,
+      channel_ref: ServerChannelRefSchema,
     })
   ),
   dataVariant(
     "channels_delete",
     Schema.Struct({
-      channel: ServerChannelRefSchema,
+      channel_ref: ServerChannelRefSchema,
     })
   ),
   dataVariant(
     "channels_move",
     Schema.Struct({
-      channel: ServerChannelRefSchema,
+      channel_ref: ServerChannelRefSchema,
       channel_move: ServerChannelMoveSchema,
     })
   ),
   dataVariant(
     "messages_update",
     Schema.Struct({
-      message: MessageRefSchema,
+      message_ref: MessageRefSchema,
       message_update: MessageUpdateSchema,
     })
   ),
   dataVariant(
     "messages_create",
     Schema.Struct({
-      text_channel: TextChannelRefSchema,
+      text_channel_ref: TextChannelRefSchema,
       new_message: NewMessageSchema,
     })
   ),
@@ -253,25 +253,25 @@ export const WsRequestSchema = Schema.Union([
   dataVariant(
     "messages_get_by_server",
     Schema.Struct({
-      server: ServerRefSchema,
+      server_ref: ServerRefSchema,
     })
   ),
   dataVariant(
     "messages_get_by_text_channel",
     Schema.Struct({
-      text_channel: TextChannelRefSchema,
+      text_channel_ref: TextChannelRefSchema,
     })
   ),
   dataVariant(
     "messages_get_by_id",
     Schema.Struct({
-      message: MessageRefSchema,
+      message_ref: MessageRefSchema,
     })
   ),
   dataVariant(
     "messages_delete",
     Schema.Struct({
-      message: MessageRefSchema,
+      message_ref: MessageRefSchema,
     })
   ),
 ]);
@@ -331,7 +331,7 @@ export const WsUpdateSchema = Schema.Union([
   dataVariant(
     "membership_deleted",
     Schema.Struct({
-      server: ServerRefSchema,
+      server_ref: ServerRefSchema,
       user_ref: UserRefSchema,
     })
   ),
@@ -339,14 +339,14 @@ export const WsUpdateSchema = Schema.Union([
   dataVariant(
     "server_deleted",
     Schema.Struct({
-      server: ServerRefSchema,
+      server_ref: ServerRefSchema,
     })
   ),
   dataVariant("channel_upserted", ServerChannelSchema),
   dataVariant(
     "channel_deleted",
     Schema.Struct({
-      server: ServerRefSchema,
+      server_ref: ServerRefSchema,
       channel_id: ServerChannelIdSchema,
     })
   ),
