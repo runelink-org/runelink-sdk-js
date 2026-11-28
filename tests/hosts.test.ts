@@ -46,6 +46,10 @@ it("hosts decode to the same canonical spelling as the hosts' parser", () => {
     ["localhost/path", undefined],
     ["alice@localhost", undefined],
     ["http://localhost", undefined],
+    ["example.com\u0001", undefined],
+    ["exam\tple.com", undefined],
+    ["a\uFEFFb.com", "ab.com"],
+    ["ΟΣ", "xn--0xai"],
   ] as const) {
     assert.equal(Option.getOrUndefined(decodeHost(host)), expected, host);
   }
@@ -68,10 +72,16 @@ it("hosts name their URLs with ports", () => {
 
 it("entered hosts may have a scheme or a trailing slash", () => {
   assert.equal(validateHost(" HTTPS://Example.COM:7000/ "), "example.com");
+  assert.equal(validateHost("ΟΣ"), "xn--0xai");
   assert.equal(validateHost("http://localhost:7001"), "localhost:7001");
   for (const input of ["example.com:abc", "exa$mple.com", "", "a/b"]) {
     assert.throws(() => validateHost(input), input);
   }
+});
+
+it("hosts can't be made or encoded in another spelling", () => {
+  assert.throws(() => HostSchema.make("EXAMPLE.COM:7000"));
+  assert.equal(HostSchema.make("example.com"), "example.com");
 });
 
 it("plain strings are not hosts", () => {

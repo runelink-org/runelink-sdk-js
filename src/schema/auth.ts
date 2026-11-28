@@ -1,10 +1,11 @@
 import * as Schema from "effect/Schema";
+import { HostSchema } from "./host.js";
 import { Timestamp } from "./primitives.js";
 import { UserRefSchema } from "./user.js";
 
 export const LocalAccountSchema = Schema.Struct({
   user_name: Schema.String,
-  user_host: Schema.String,
+  user_host: HostSchema,
   password_hash: Schema.String,
   created_at: Timestamp,
   updated_at: Timestamp,
@@ -18,7 +19,7 @@ export const SignupRequestSchema = Schema.Struct({
 export const RefreshTokenSchema = Schema.Struct({
   token: Schema.String,
   user_name: Schema.String,
-  user_host: Schema.String,
+  user_host: HostSchema,
   client_id: Schema.String,
   issued_at: Timestamp,
   expires_at: Timestamp,
