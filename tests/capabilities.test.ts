@@ -103,7 +103,7 @@ function connection(welcome: object) {
   return RunelinkConnection.make({
     url: "ws://localhost:7000/ws",
     autoReconnect: false,
-    capabilities: { "messages.read": ["2026.10.19"], ping: [v1] },
+    capabilities: { "messages.read": ["2026.11.27"], ping: [v1] },
   }).pipe(
     Effect.provideService(
       Socket.WebSocketConstructor,
@@ -165,7 +165,7 @@ it.effect("malformed rejection partitions fail negotiation", () =>
     for (const rejected of [
       {},
       { ping: [], "messages.read": [] },
-      { "messages.read": ["2026.10.19"] },
+      { "messages.read": ["2026.11.27"] },
       { "messages.read": [], unknown: [] },
     ] as const) {
       yield* Effect.scoped(
@@ -447,14 +447,14 @@ it.effect(
       const conn = yield* RunelinkConnection.make({
         url: "ws://localhost:7000/ws",
         autoReconnect: false,
-        capabilities: { "messages.events": ["2026.10.19"] },
+        capabilities: { "messages.events": ["2026.11.27"] },
       }).pipe(
         Effect.provideService(
           Socket.WebSocketConstructor,
           () =>
             new FakeSocket({
               ...base,
-              capabilities: { "messages.events": "2026.10.19" },
+              capabilities: { "messages.events": "2026.11.27" },
             })
         )
       );
@@ -468,6 +468,7 @@ it.effect(
         id = "00000000-0000-4000-8000-000000000001";
       const data = {
         id,
+        host: "localhost",
         text_channel_id: id,
         author: null,
         reply_to: null,

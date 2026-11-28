@@ -1,13 +1,21 @@
 import * as Schema from "effect/Schema";
 import { detailsUpdateFields } from "./edit.js";
 import { MetadataSchema } from "./metadata.js";
-import { ExactStruct, NullDefault, Timestamp, Uuid } from "./primitives.js";
+import {
+  ExactStruct,
+  HostSchema,
+  NullDefault,
+  Timestamp,
+  Uuid,
+} from "./primitives.js";
 
 export const ServerChannelKindSchema = Schema.Literals(["text", "category"]);
 
 const serverChannelFields = {
   metadata: MetadataSchema.pipe(Schema.NullOr, Schema.optional),
   id: Uuid,
+  // The host of the channel's server
+  host: HostSchema,
   server_id: Uuid,
   title: Schema.String,
   description: NullDefault(Schema.String),

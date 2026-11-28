@@ -3,6 +3,12 @@ import * as Schema from "effect/Schema";
 
 export const Uuid = Schema.String.check(Schema.isUUID());
 
+/**
+ * A host, as hosts spell it in replies: lowercase, without the default port.
+ * Hosts compare as strings only in that spelling.
+ */
+export const HostSchema = Schema.String;
+
 // RFC 3339 with a required offset and any fractional precision. Timestamps
 // stay strings to preserve the host's full precision.
 export const Timestamp = Schema.String.check(
