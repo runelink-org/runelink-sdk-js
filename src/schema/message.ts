@@ -5,19 +5,19 @@ import {
   HostSchema,
   NullDefault,
   Timestamp,
-  Uuid,
 } from "./primitives.js";
+import { MessageIdSchema, TextChannelIdSchema } from "./ref.js";
 import { UserRefSchema, UserSchema } from "./user.js";
 
 const messageFields = {
   metadata: MetadataSchema.pipe(Schema.NullOr, Schema.optional),
-  id: Uuid,
+  id: MessageIdSchema,
   // The host of the message's text channel
   host: HostSchema,
-  text_channel_id: Uuid,
+  text_channel_id: TextChannelIdSchema,
   author: Schema.NullOr(UserSchema),
   // A message in the same text channel
-  reply_to: Schema.NullOr(Uuid),
+  reply_to: Schema.NullOr(MessageIdSchema),
   edited_at: NullDefault(Timestamp),
   created_at: Timestamp,
   // Preserve sub-millisecond precision for edit preconditions.
@@ -46,7 +46,7 @@ export const NewMessageSchema = Schema.Struct({
   metadata: MetadataSchema.pipe(Schema.NullOr, Schema.optional),
   author: UserRefSchema,
   body: Schema.String,
-  reply_to: Uuid.pipe(Schema.NullOr, Schema.optional),
+  reply_to: MessageIdSchema.pipe(Schema.NullOr, Schema.optional),
 });
 
 export type ActiveMessage = typeof ActiveMessageSchema.Type;
