@@ -1,6 +1,6 @@
 {
   "name": "@runelink/sdk",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Runelink SDK for JavaScript/TypeScript",
   "type": "module",
   "main": "./dist/index.cjs",
