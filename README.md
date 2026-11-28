@@ -95,6 +95,8 @@ Errors are `Schema.TaggedError` classes, so they can be handled with `Effect.cat
 
 Connections reconnect with exponential backoff and jitter after a socket fails to open or closes. Requests in flight when a socket closes fail with `RunelinkConnectionError`; they are never resent. Each reconnect negotiates a new socket, so authenticate again after reconnecting.
 
+Hosts send each socket the presence statuses it should know as soon as it authenticates, which can be before the authentication reply arrives. Drop statuses kept from an earlier socket before authenticating again, not when the reply arrives. Users with no status sent are offline.
+
 Available options:
 
 - `autoReconnect`
