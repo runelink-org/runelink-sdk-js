@@ -58,7 +58,7 @@ program.pipe(
 
 `RunelinkConnection.layer(options)` provides one connection for the lifetime of the layer. To create connections on demand, such as one per account, use `RunelinkConnection.make(options)` inside a scope; the connection disconnects when the scope closes. Both need a `Socket.WebSocketConstructor`: `Socket.layerWebSocketConstructorGlobal` uses the global `WebSocket` in browsers and Node.
 
-`{ host }` connects to the host's client websocket over `wss://`, falling back to `ws://` if no secure socket has opened yet, which sends credentials unencrypted. Set `transportSecurity` to `"secure-only"` or `"insecure-only"` to use one scheme, or pass `{ url }` to use a websocket URL directly.
+`{ host }` connects to the host's client websocket over `wss://`, falling back to `ws://` if the secure socket doesn't open, such as on a certificate error, which sends credentials unencrypted. The first socket to open sets the scheme for later reconnects. Set `transportSecurity` to `"secure-only"` or `"insecure-only"` to use one scheme, or pass `{ url }` to use a websocket URL directly.
 
 ## Connection API
 
