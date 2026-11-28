@@ -1,5 +1,6 @@
 import * as Schema from "effect/Schema";
-import { HostSchema, Timestamp } from "./primitives.js";
+import { HostSchema } from "./host.js";
+import { Timestamp } from "./primitives.js";
 
 export const UserRoleSchema = Schema.Literals(["user", "admin"]);
 

@@ -22,7 +22,7 @@ const requiredFiles = [
 
 const typeCheck = `import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { RunelinkConnection, WsRequestSchema } from "@runelink/sdk";
+import { RunelinkConnection, WsRequestSchema, validateHost } from "@runelink/sdk";
 import type { WsRequest } from "@runelink/sdk";
 
 const request: WsRequest = Schema.decodeUnknownSync(WsRequestSchema)({
@@ -34,7 +34,7 @@ const program = Effect.gen(function* () {
   const pong: "pong" = reply.type;
   return pong;
 });
-const layer = RunelinkConnection.layer({ host: "localhost" });
+const layer = RunelinkConnection.layer({ host: validateHost("localhost") });
 `;
 
 async function run(command, args, cwd) {

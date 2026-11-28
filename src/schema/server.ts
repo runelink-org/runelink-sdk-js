@@ -1,12 +1,8 @@
 import * as Schema from "effect/Schema";
 import { ServerChannelSchema } from "./channel.js";
 import { detailsUpdateFields } from "./edit.js";
-import {
-  ExactStruct,
-  HostSchema,
-  NullDefault,
-  Timestamp,
-} from "./primitives.js";
+import { HostSchema } from "./host.js";
+import { ExactStruct, NullDefault, Timestamp } from "./primitives.js";
 import { ServerIdSchema, ServerRefSchema } from "./ref.js";
 import { UserRefSchema, UserSchema } from "./user.js";
 

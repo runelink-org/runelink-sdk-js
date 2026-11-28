@@ -2,7 +2,8 @@ import * as Schema from "effect/Schema";
 import { MessageUpdateSchema } from "./schema/message.js";
 import { ServerUpdateSchema } from "./schema/server.js";
 import { ServerChannelUpdateSchema } from "./schema/channel.js";
-import { HostSchema, Uuid } from "./schema/primitives.js";
+import { HostSchema } from "./schema/host.js";
+import { Uuid } from "./schema/primitives.js";
 import {
   AuthTokenPasswordRequestSchema,
   AuthTokenRefreshRequestSchema,
