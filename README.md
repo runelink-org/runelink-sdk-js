@@ -128,30 +128,6 @@ Use `resourceKey(ref)` to key cached resources, since two hosts can use the same
 
 Hosts have the branded `Host` type: a host name or IP address with an optional port, in its canonical spelling, lowercase and without the default port (`DEFAULT_PORT`, 7000). Decoding with `HostSchema`, which every schema with a host uses, canonicalizes any spelling, and `validateHost(input)` parses a host that a person entered, which may also have a URL scheme or a trailing slash. Two hosts are the same host exactly when they are equal. To connect to a host, use `hostApiUrl(host, secure)` or `hostClientWsUrl(host, secure)`, and `hostAuthority(host)` where the port must always be spelled out.
 
-## Migrating from 0.2
-
-Resource IDs are now scoped to their host:
-
-- `ServerChannel` and `Message` have a `host` field.
-- Resource IDs have branded types for each kind, such as `ServerId`, so plain strings must be decoded with the matching schema, such as `ServerIdSchema`, before they can be used as IDs.
-- Hosts have the branded `Host` type, which `HostSchema` decodes to its canonical spelling. `RunelinkConnection` takes a `Host`, and `validateHost` returns one and no longer takes an `allowPort` option.
-- `padHost`, `getApiUrl`, `getWsUrl`, `hostFromIssuer`, `stripDefaultPort`, and `normalizeHostInput` were removed. Use `hostAuthority`, `hostApiUrl`, and `hostClientWsUrl`, which take a `Host`.
-- Requests that name a server, channel, text channel, or message take a ref (`server_ref`, `channel_ref`, `text_channel_ref`, or `message_ref`) instead of its ID and `target_host`. `target_host` remains on requests that do not name a server, channel, or message.
-- `memberships_upsert` takes only `new_membership`, and `NewServerMembership` names its server with `server_ref` instead of `server_id` and `server_host`.
-- `server_deleted`, `channel_deleted`, and `membership_deleted` updates name their server with `server_ref` instead of `server_id`.
-- These shapes use the 2026.11.27 capability versions, so the affected operations and updates are unavailable on hosts that do not support them yet.
-
-## Migrating from 0.1
-
-Version 0.1 used Zod schemas and a Promise-based `RunelinkConnection` class. The SDK now uses Effect throughout:
-
-- Schemas keep their names but are Effect Schema schemas: replace `Schema.parse(value)` with `Schema.decodeUnknownSync(Schema)(value)`, or the Effect variants in Effect code. Arrays in decoded values are readonly.
-- `new RunelinkConnection(hostOrUrl, options, mode)` is now `RunelinkConnection.make({ host, ...options })` or `RunelinkConnection.make({ url, ...options })`, or `RunelinkConnection.layer(...)`, with a `Socket.WebSocketConstructor` provided.
-- `connect()` and `disconnect()` are the `connect` and `disconnect` effects. `send(request)` is `request(request)`, which also checks the reply type.
-- `getStatus()` and `subscribeStatus(listener)` are `status` and `statusChanges`, `onUpdate(listener)` is `updates`, and `onError(listener)` is `errors`.
-- `getCapabilityIssues()` is `capabilityIssues`. `getNegotiatedCapabilities()` and `getUnsupportedCapabilities()` were removed; use the capabilities on each issue instead.
-- Errors are now `Schema.TaggedError` classes with a `_tag`. `RunelinkRequestError` is replaced by a class for each host error code, such as `RunelinkNotFoundError`, whose `message` is the host's message.
-
 ## License
 
 MIT
